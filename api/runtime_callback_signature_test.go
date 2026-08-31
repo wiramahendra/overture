@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
+	"github.com/wiramahendra/overture/coordinator"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
