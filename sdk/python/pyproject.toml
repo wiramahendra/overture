@@ -3,12 +3,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-# Distribution name is igris-sdk (not the unrelated public PyPI package named
-# "igris"). The import package remains `igris`. Do not `pip install igris`
-# from the public index for this SDK until publication is explicitly authorized.
-name = "igris-sdk"
+# Distribution is overture-sdk with import `overture` (canonical). Legacy `igris` remains.
+# Do not `pip install igris` from public index — that name is unrelated. Use `overture-sdk`.
+name = "overture-sdk"
 version = "0.1.0a2"
-description = "Igris is a drop-in action layer for consequential AI-agent actions."
+description = "Overture — safe execution boundary for consequential actions (Action -> Run -> Proof)."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
@@ -30,6 +29,7 @@ classifiers = [
 ]
 
 [project.scripts]
+overture = "overture.cli:main"
 igris = "igris.cli:main"
 
 [dependency-groups]
@@ -40,10 +40,11 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/igris"]
+packages = ["src/overture", "src/igris"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+    "src/overture",
     "src/igris",
     "docs/evidence-privacy.md",
     "docs/wrapping-existing-tools.md",
