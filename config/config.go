@@ -17,7 +17,8 @@ type Config struct {
 	RateLimit       RateLimitConfig
 	Security        SecurityConfig
 	Persistence     PersistenceConfig // Phase 2: External state persistence
-	Speculative     SpeculativeConfig // Speculative execution configuration
+	Speculative     SpeculativeConfig // Speculative execution configuration (pruned — disabled by default)
+	Execution       ExecutionConfig   // Durable execution tuning (first-class)
 }
 
 // ServerConfig holds server configuration
@@ -109,35 +110,30 @@ const (
 	SpeculativeModeBalanced SpeculativeMode = "balanced" // Balanced optimization across all criteria
 )
 
-// SpeculativeConfig holds configuration for speculative execution
+// SpeculativeConfig holds configuration for speculative execution (pruned)
 type SpeculativeConfig struct {
-	// Global feature flag
-	Enabled bool `json:"enabled"`
+	Enabled               bool           `json:"enabled"`
+	DefaultMode           SpeculativeMode `json:"default_mode"`
+	MaxProviders          int            `json:"max_providers"`
+	FirstTokenTimeout     time.Duration  `json:"first_token_timeout"`
+	EarlyTokenCount       int            `json:"early_token_count"`
+	CostMultiplier        float64        `json:"cost_multiplier"`
+	WasteThreshold        float64        `json:"waste_threshold"`
+	ChairmanProvider      string         `json:"chairman_provider"`
+	UseONNXQualityScoring bool           `json:"use_onnx_quality_scoring"`
+	ONNXModelPath         string         `json:"onnx_model_path"`
+}
 
-	// Default mode for tenants (can be overridden per-tenant)
-	DefaultMode SpeculativeMode `json:"default_mode"`
-
-	// Maximum number of providers to race in parallel (2-4)
-	MaxProviders int `json:"max_providers"`
-
-	// Timeout for first token arrival (after this, select fastest responder)
-	FirstTokenTimeout time.Duration `json:"first_token_timeout"`
-
-	// Number of early tokens to buffer for quality scoring (default: 5)
-	EarlyTokenCount int `json:"early_token_count"`
-
-	// Maximum acceptable cost multiplier (e.g., 1.5 = allow 50% waste)
-	CostMultiplier float64 `json:"cost_multiplier"`
-
-	// Auto-disable threshold: disable speculative mode if waste ratio exceeds this
-	WasteThreshold float64 `json:"waste_threshold"`
-
-	// Council mode configuration
-	ChairmanProvider string `json:"chairman_provider"` // Chairman model for council mode (default: "grok-4" or first available)
-
-	// ONNX-based quality scoring configuration
-	UseONNXQualityScoring bool   `json:"use_onnx_quality_scoring"` // Enable ONNX model for quality scoring (fallback to heuristic if false/unavailable)
-	ONNXModelPath         string `json:"onnx_model_path"`          // Path to ONNX quality scoring model
+// ExecutionConfig holds durable execution tuning (first-class).
+// Env canonical: OVERTURE_* with IGRIS_* fallback.
+type ExecutionConfig struct {
+	HeartbeatTimeout       time.Duration `json:"heartbeat_timeout"`        // how long before runtime declared dead (default 90s)
+	RecoveryInterval       time.Duration `json:"recovery_interval"`        // how often to scan for dead runtimes (default 15s)
+	DispatchConcurrency    int           `json:"dispatch_concurrency"`     // max concurrent dispatches (default 32)
+	MaxRecoveryAttempts    int           `json:"max_recovery_attempts"`    // before DLQ (default 10)
+	DeadlineReaperInterval time.Duration `json:"deadline_reaper_interval"` // sweep expired tasks (default 30s)
+	InputRefTTL            time.Duration `json:"input_ref_ttl"`            // execution_input_refs expiry (default 24h)
+	CheckpointInterval     int           `json:"checkpoint_interval"`      // forced checkpoint every N steps (default 5)
 }
 
 // LoadConfig loads configuration from environment variables
@@ -215,9 +211,18 @@ func LoadConfig() *Config {
 			EarlyTokenCount:       getEnvInt("SPECULATIVE_EARLY_TOKEN_COUNT", 5),
 			CostMultiplier:        getEnvFloat("SPECULATIVE_COST_MULTIPLIER", 1.5),
 			WasteThreshold:        getEnvFloat("SPECULATIVE_WASTE_THRESHOLD", 0.3),
-			ChairmanProvider:      getEnv("COUNCIL_CHAIRMAN_PROVIDER", "gpt-4"), // Default to gpt-4 for chairman
-			UseONNXQualityScoring: getEnvBool("USE_ONNX_QUALITY_SCORING", false), // Disabled by default, falls back to heuristic
+			ChairmanProvider:      getEnv("COUNCIL_CHAIRMAN_PROVIDER", "gpt-4"),
+			UseONNXQualityScoring: getEnvBool("USE_ONNX_QUALITY_SCORING", false),
 			ONNXModelPath:         getEnv("ONNX_QUALITY_MODEL_PATH", "/models/quality_scorer.onnx"),
+		},
+		Execution: ExecutionConfig{
+			HeartbeatTimeout:       getEnvDurationWithFallback("OVERTURE_HEARTBEAT_TIMEOUT", "IGRIS_HEARTBEAT_TIMEOUT", 90*time.Second),
+			RecoveryInterval:       getEnvDurationWithFallback("OVERTURE_RECOVERY_INTERVAL", "IGRIS_RECOVERY_INTERVAL", 15*time.Second),
+			DispatchConcurrency:    getEnvIntWithFallback("OVERTURE_DISPATCH_CONCURRENCY", "IGRIS_DISPATCH_CONCURRENCY", 32),
+			MaxRecoveryAttempts:    getEnvIntWithFallback("OVERTURE_MAX_RECOVERY_ATTEMPTS", "IGRIS_MAX_RECOVERY_ATTEMPTS", 10),
+			DeadlineReaperInterval: getEnvDurationWithFallback("OVERTURE_DEADLINE_REAPER_INTERVAL", "IGRIS_DEADLINE_REAPER_INTERVAL", 30*time.Second),
+			InputRefTTL:            getEnvDurationWithFallback("OVERTURE_INPUT_REF_TTL", "IGRIS_INPUT_REF_TTL", 24*time.Hour),
+			CheckpointInterval:     getEnvIntWithFallback("OVERTURE_CHECKPOINT_INTERVAL", "IGRIS_CHECKPOINT_INTERVAL", 5),
 		},
 	}
 }
@@ -227,6 +232,44 @@ func LoadConfig() *Config {
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+func getEnvWithFallback(primary, fallback, defaultValue string) string {
+	if v := os.Getenv(primary); v != "" {
+		return v
+	}
+	if v := os.Getenv(fallback); v != "" {
+		return v
+	}
+	return defaultValue
+}
+
+func getEnvIntWithFallback(primary, fallback string, defaultValue int) int {
+	if v := os.Getenv(primary); v != "" {
+		if iv, err := strconv.Atoi(v); err == nil {
+			return iv
+		}
+	}
+	if v := os.Getenv(fallback); v != "" {
+		if iv, err := strconv.Atoi(v); err == nil {
+			return iv
+		}
+	}
+	return defaultValue
+}
+
+func getEnvDurationWithFallback(primary, fallback string, defaultValue time.Duration) time.Duration {
+	if v := os.Getenv(primary); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	if v := os.Getenv(fallback); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
 	}
 	return defaultValue
 }
