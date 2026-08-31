@@ -9,7 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Igris-inertial/system/igris-overture/agentmemory"
+	"github.com/wiramahendra/overture/agentmemory"
 )
 
 func TestHandleAgentMemoryCreateRejectsTenantOverride(t *testing.T) {
