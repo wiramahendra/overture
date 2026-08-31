@@ -6,9 +6,9 @@ import (
 	"log"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/Igris-inertial/system/cmd/igris-overture/handlers"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
-	"github.com/Igris-inertial/system/igris-overture/security"
+	"github.com/wiramahendra/overture/cmd/igris-overture/handlers"
+	"github.com/wiramahendra/overture/middleware"
+	"github.com/wiramahendra/overture/security"
 )
 
 // ProviderRegistryRouteConfig holds configuration for provider registry routes
