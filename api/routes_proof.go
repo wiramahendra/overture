@@ -14,9 +14,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
-	"github.com/Igris-inertial/system/igris-overture/internal"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/coordinator"
+	"github.com/wiramahendra/overture/internal"
+	"github.com/wiramahendra/overture/middleware"
+	"github.com/wiramahendra/overture/observability"
 )
 
 // ProofHandler handles proof receipt API requests.
@@ -285,10 +286,10 @@ func (h *ProofHandler) VerifyReceipt(c *fiber.Ctx) error {
 		})
 	}
 
-	// Pick a runtime public key: registry entry first, env var fallback.
+	// Pick a runtime public key: registry entry first, env var fallback (OVERTURE canonical, IGRIS legacy).
 	publicKeyHex := strings.TrimSpace(row.runtimePublicKey)
 	if publicKeyHex == "" {
-		publicKeyHex = strings.TrimSpace(os.Getenv("IGRIS_RUNTIME_PUBLIC_KEY"))
+		publicKeyHex = strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_RUNTIME_PUBLIC_KEY", "IGRIS_RUNTIME_PUBLIC_KEY"))
 	}
 
 	// Reconstruct the canonical receipt from stored execution_lineage columns.
@@ -328,6 +329,7 @@ func (h *ProofHandler) VerifyReceipt(c *fiber.Ctx) error {
 
 	verified := cryptoResult.Verified()
 	verificationStatus := cryptographicVerificationStatus(cryptoResult, row.proofStatus, row.storedHash)
+	observability.RecordProofVerified(tenantID, verificationStatus)
 
 	// Chain-link verification: the previous_hash in the current receipt must
 	// reference a prior receipt whose canonical re-derivation still equals
