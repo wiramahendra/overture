@@ -30,6 +30,7 @@ type ActionEntry struct {
 	DisplayName         string                 `json:"display_name,omitempty"`
 	Description         string                 `json:"description"`
 	TargetType          string                 `json:"target_type"`
+	TargetURL           string                 `json:"target_url,omitempty"`
 	PolicyPreset        string                 `json:"policy_preset"`
 	ReplayClass         string                 `json:"replay_class,omitempty"`
 	ApprovalRequired    *bool                  `json:"approval_required,omitempty"`
@@ -101,8 +102,18 @@ func validateActionEntry(action ActionEntry, index int) error {
 		return fmt.Errorf("%s.description is required", prefix)
 	}
 	targetType := strings.TrimSpace(action.TargetType)
-	if targetType != "mock_demo" {
-		return fmt.Errorf("%s.target_type must be mock_demo for built-in packs", prefix)
+	switch targetType {
+	case "mock_demo", "hosted_api", "webhook", "local_runtime":
+	default:
+		return fmt.Errorf("%s.target_type must be one of mock_demo, hosted_api, webhook, local_runtime", prefix)
+	}
+	if (targetType == "hosted_api" || targetType == "webhook") && strings.TrimSpace(action.TargetURL) != "" {
+		if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(action.TargetURL)), "https://") {
+			return fmt.Errorf("%s.target_url must be https:// for %s", prefix, targetType)
+		}
+		if strings.Contains(strings.ToLower(action.TargetURL), "://localhost") || strings.Contains(action.TargetURL, "127.0.0.1") {
+			return fmt.Errorf("%s.target_url must not be loopback for %s (use http://127.0.0.1 for local dev packs)", prefix, targetType)
+		}
 	}
 	preset := strings.TrimSpace(action.PolicyPreset)
 	switch preset {
