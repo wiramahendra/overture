@@ -11,8 +11,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
-	"github.com/Igris-inertial/system/igris-overture/executionevals"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/executionevals"
+	"github.com/wiramahendra/overture/middleware"
 )
 
 func RegisterExecutionEvalRoutes(app *fiber.App, db *sql.DB) {
