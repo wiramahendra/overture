@@ -7,7 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/Igris-inertial/system/igris-overture/logging"
+	"github.com/wiramahendra/overture/logging"
 )
 
 // MetricsCollector singleton instance
