@@ -10,8 +10,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/billing"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/billing"
+	"github.com/wiramahendra/overture/middleware"
 )
 
 // TrialHandler handles trial lifecycle requests.
@@ -84,7 +84,7 @@ func (h *TrialHandler) StartTrial(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 				"error":   "trial_already_used",
 				"message": "Each account is eligible for one 7-day trial. Subscribe to continue.",
-				"upgrade_url": "https://igrisinertial.com/pricing",
+				"upgrade_url": "https://overture.example/pricing",
 			})
 		}
 		log.Error().Err(err).Str("tenant_id", tenantID).Msg("[Trial] Failed to start trial")
@@ -110,7 +110,7 @@ func (h *TrialHandler) StartTrial(c *fiber.Ctx) error {
 		"days_left":    status.DaysLeft,
 		"ends_at":      status.EndsAt,
 		"message":      "Your 7-day trial has started. No credit card required.",
-		"upgrade_url":  "https://igrisinertial.com/pricing",
+		"upgrade_url":  "https://overture.example/pricing",
 	})
 }
 
