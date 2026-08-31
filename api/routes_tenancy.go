@@ -6,11 +6,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/Igris-inertial/system/cmd/igris-overture/handlers"
-	apihandlers "github.com/Igris-inertial/system/igris-overture/api/handlers"
-	"github.com/Igris-inertial/system/igris-overture/billing"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
-	"github.com/Igris-inertial/system/igris-overture/security"
+	"github.com/wiramahendra/overture/cmd/igris-overture/handlers"
+	apihandlers "github.com/wiramahendra/overture/api/handlers"
+	"github.com/wiramahendra/overture/billing"
+	"github.com/wiramahendra/overture/middleware"
+	"github.com/wiramahendra/overture/security"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -178,7 +178,7 @@ func RegisterAuthRoutes(app *fiber.App, db *sql.DB) {
 		return c.Status(fiber.StatusGone).JSON(fiber.Map{
 			"error": "This endpoint has been retired. Authentication is now handled by Clerk.",
 			"code":  "ENDPOINT_RETIRED",
-			"docs":  "https://docs.igrisinertial.com/auth",
+			"docs":  "https://docs.overture.example/auth",
 		})
 	})
 
@@ -187,7 +187,7 @@ func RegisterAuthRoutes(app *fiber.App, db *sql.DB) {
 		return c.Status(fiber.StatusGone).JSON(fiber.Map{
 			"error": "This endpoint has been retired. Token refresh is managed by Clerk.",
 			"code":  "ENDPOINT_RETIRED",
-			"docs":  "https://docs.igrisinertial.com/auth",
+			"docs":  "https://docs.overture.example/auth",
 		})
 	})
 
@@ -197,7 +197,7 @@ func RegisterAuthRoutes(app *fiber.App, db *sql.DB) {
 		return c.Status(fiber.StatusGone).JSON(fiber.Map{
 			"error": "This endpoint has been retired. Use Clerk's signOut() to end the session.",
 			"code":  "ENDPOINT_RETIRED",
-			"docs":  "https://docs.igrisinertial.com/auth",
+			"docs":  "https://docs.overture.example/auth",
 		})
 	})
 
