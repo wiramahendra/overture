@@ -6,10 +6,10 @@ import (
 	"os"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/Igris-inertial/system/cmd/igris-overture/handlers"
-	"github.com/Igris-inertial/system/igris-overture/database"
-	"github.com/Igris-inertial/system/igris-overture/internal"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/cmd/igris-overture/handlers"
+	"github.com/wiramahendra/overture/database"
+	"github.com/wiramahendra/overture/internal"
+	"github.com/wiramahendra/overture/middleware"
 )
 
 // RegisterInferRoutes registers /v1/infer and related endpoints
@@ -31,7 +31,7 @@ func RegisterInferRoutes(app *fiber.App, tenantAuth *middleware.TenantAuth, db *
 		sel.StartHealthPoller(context.Background())
 		inferHandler.SetRuntimeExecutor(sel)
 		log.Printf("[Routes] Runtime selector active (DB-backed registry with health polling)")
-	} else if runtimeURL := os.Getenv("IGRIS_RUNTIME_URL"); runtimeURL != "" {
+	} else if runtimeURL := internal.EnvOrLegacy("OVERTURE_RUNTIME_URL", "IGRIS_RUNTIME_URL"); runtimeURL != "" {
 		rc := internal.NewRuntimeClient(runtimeURL)
 		inferHandler.SetRuntimeExecutor(rc)
 		log.Printf("[Routes] Runtime executor configured: %s", runtimeURL)
