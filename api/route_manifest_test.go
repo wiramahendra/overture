@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Igris-inertial/system/igris-overture/billing"
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
+	"github.com/wiramahendra/overture/billing"
+	"github.com/wiramahendra/overture/coordinator"
 	"github.com/gofiber/fiber/v2"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"
