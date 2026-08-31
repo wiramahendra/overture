@@ -1,3 +1,5 @@
+//go:build ignore
+ // +build ignore
 // Package api provides HTTP endpoints for SLO Enforcer administration
 package api
 
@@ -7,7 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/Igris-inertial/system/igris-overture/slo"
+	"github.com/wiramahendra/overture/slo"
 )
 
 // SLOHandler handles SLO Enforcer HTTP requests
