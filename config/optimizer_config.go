@@ -1,11 +1,16 @@
+//go:build ignore
+// +build ignore
+
+// Archived: inference optimizer/shadow config (pruned — attic/inference). Ignored for first-class execution.
+
 package config
 
 import (
 	"sync"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/inference/optimizer/ffi"
-	"github.com/Igris-inertial/system/igris-overture/inference/optimizer/shadow"
+	"github.com/wiramahendra/overture/inference/optimizer/ffi"
+	"github.com/wiramahendra/overture/inference/optimizer/shadow"
 )
 
 // OptimizerConfig holds configuration for the optimizer
