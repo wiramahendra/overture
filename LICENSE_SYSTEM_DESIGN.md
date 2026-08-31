@@ -1,4 +1,11 @@
-# Igris License System Design
+# License System Design (ARCHIVED — per-device design)
+
+> **Status: ARCHIVED.** This doc describes a per-device $49/device metered design (seed 1 device free, horizon $49/device). **Active billing for Overture on Azure is flat** — see `billing/tier.go` + `docs/FLAT_BILLING.md` (seed 3 runtimes $29, horizon 50 runtimes $149, infinite 500 runtimes $699). Kept for reference only.
+>
+> Canonical import is now `overture` (`github.com/wiramahendra/overture`), not `Igris`.
+
+# Igris License System Design (archived)
+
 
 ## Overview
 
