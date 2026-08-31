@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/alerts"
+	"github.com/wiramahendra/overture/alerts"
 )
 
 // EmailProvider sends alerts via SMTP email
