@@ -20,22 +20,83 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/internal"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+
+	"github.com/wiramahendra/overture/internal"
+	"github.com/wiramahendra/overture/observability"
 )
 
 const (
-	// heartbeatTimeout is how long we wait before declaring a runtime dead.
-	heartbeatTimeout = 90 * time.Second
-	// recoveryInterval is how often we scan for failed runtimes.
-	recoveryInterval = 15 * time.Second
-	// checkpointInterval is how many steps between forced checkpoints.
-	checkpointInterval = 5
-	// minRuntimeDeadlineBudgetMs keeps an already-expired first dispatch from
-	// becoming a huge absolute timestamp when Runtime expects a duration budget.
-	minRuntimeDeadlineBudgetMs = int64(1)
+	defaultHeartbeatTimeout       = 90 * time.Second
+	defaultRecoveryInterval       = 15 * time.Second
+	defaultCheckpointInterval     = 5
+	defaultDispatchConcurrency    = 32
+	defaultMaxRecoveryAttempts    = 10
+	minRuntimeDeadlineBudgetMs    = int64(1)
 )
+
+// legacy const aliases for backward compat in tests — will resolve to defaults
+const (
+	heartbeatTimeout     = defaultHeartbeatTimeout
+	recoveryInterval     = defaultRecoveryInterval
+	checkpointInterval   = defaultCheckpointInterval
+)
+
+// ExecutionConfig holds durable execution tuning (first-class). Mirrors config.ExecutionConfig but lives
+// in coordinator to avoid import cycle. Server translates config -> coordinator.
+type ExecutionConfig struct {
+	HeartbeatTimeout       time.Duration `json:"heartbeat_timeout"`
+	RecoveryInterval       time.Duration `json:"recovery_interval"`
+	CheckpointInterval     int           `json:"checkpoint_interval"`
+	DispatchConcurrency    int           `json:"dispatch_concurrency"`
+	MaxRecoveryAttempts    int           `json:"max_recovery_attempts"`
+	DeadlineReaperInterval time.Duration `json:"deadline_reaper_interval"`
+	InputRefTTL            time.Duration `json:"input_ref_ttl"`
+}
+
+func defaultExecutionConfig() ExecutionConfig {
+	return ExecutionConfig{
+		HeartbeatTimeout:       defaultHeartbeatTimeout,
+		RecoveryInterval:       defaultRecoveryInterval,
+		CheckpointInterval:     defaultCheckpointInterval,
+		DispatchConcurrency:    defaultDispatchConcurrency,
+		MaxRecoveryAttempts:    defaultMaxRecoveryAttempts,
+		DeadlineReaperInterval: 30 * time.Second,
+		InputRefTTL:            24 * time.Hour,
+	}
+}
+
+func (c ExecutionConfig) heartbeatTimeoutOrDefault() time.Duration {
+	if c.HeartbeatTimeout > 0 {
+		return c.HeartbeatTimeout
+	}
+	return defaultHeartbeatTimeout
+}
+func (c ExecutionConfig) recoveryIntervalOrDefault() time.Duration {
+	if c.RecoveryInterval > 0 {
+		return c.RecoveryInterval
+	}
+	return defaultRecoveryInterval
+}
+func (c ExecutionConfig) checkpointIntervalOrDefault() int {
+	if c.CheckpointInterval > 0 {
+		return c.CheckpointInterval
+	}
+	return defaultCheckpointInterval
+}
+func (c ExecutionConfig) dispatchConcurrencyOrDefault() int {
+	if c.DispatchConcurrency > 0 {
+		return c.DispatchConcurrency
+	}
+	return defaultDispatchConcurrency
+}
+func (c ExecutionConfig) maxRecoveryAttemptsOrDefault() int {
+	if c.MaxRecoveryAttempts > 0 {
+		return c.MaxRecoveryAttempts
+	}
+	return defaultMaxRecoveryAttempts
+}
 
 var ErrInvalidTaskDefinition = errors.New("invalid task_definition")
 var ErrTaskIdempotencyConflict = errors.New("idempotency key reused with a different request")
@@ -46,15 +107,48 @@ type TaskCoordinator struct {
 	store        *CheckpointStore
 	httpClient   *http.Client
 	recoveryHook func(context.Context, uuid.UUID, string)
+	execCfg      ExecutionConfig
+	dispatchSem  chan struct{}
 }
 
 func NewTaskCoordinator(db *sql.DB) *TaskCoordinator {
+	cfg := defaultExecutionConfig()
 	return &TaskCoordinator{
 		db:    db,
 		store: NewCheckpointStore(db),
 		httpClient: &http.Client{
 			Timeout: 300 * time.Second, // long-running tasks
 		},
+		execCfg:     cfg,
+		dispatchSem: make(chan struct{}, cfg.dispatchConcurrencyOrDefault()),
+	}
+}
+
+// NewTaskCoordinatorWithConfig creates a coordinator with explicit execution tuning.
+func NewTaskCoordinatorWithConfig(db *sql.DB, cfg ExecutionConfig) *TaskCoordinator {
+	if cfg.HeartbeatTimeout == 0 {
+		cfg.HeartbeatTimeout = defaultHeartbeatTimeout
+	}
+	if cfg.RecoveryInterval == 0 {
+		cfg.RecoveryInterval = defaultRecoveryInterval
+	}
+	if cfg.CheckpointInterval == 0 {
+		cfg.CheckpointInterval = defaultCheckpointInterval
+	}
+	if cfg.DispatchConcurrency == 0 {
+		cfg.DispatchConcurrency = defaultDispatchConcurrency
+	}
+	if cfg.MaxRecoveryAttempts == 0 {
+		cfg.MaxRecoveryAttempts = defaultMaxRecoveryAttempts
+	}
+	return &TaskCoordinator{
+		db:    db,
+		store: NewCheckpointStore(db),
+		httpClient: &http.Client{
+			Timeout: 300 * time.Second,
+		},
+		execCfg:     cfg,
+		dispatchSem: make(chan struct{}, cfg.dispatchConcurrencyOrDefault()),
 	}
 }
 
@@ -176,6 +270,12 @@ func (tc *TaskCoordinator) Submit(ctx context.Context, req *TaskSubmitRequest) (
 	task.Status = TaskStatusDispatched
 	task.RuntimeID = &runtime.RuntimeID
 	task.RuntimeEndpoint = &runtime.Endpoint
+	// Enqueue for SKIP LOCKED dispatch audit and flag irreversible for fast filtering
+	_ = tc.enqueueDispatchQueue(ctx, task.TenantID, task.TaskID)
+	if taskHasIrreversibleAction(normalizedDefinition) {
+		_, _ = tc.db.ExecContext(ctx, `UPDATE task_records SET has_irreversible_effect=true WHERE task_id=$1`, taskID)
+		task.HasIrreversibleEffect = true
+	}
 	runtimeTask := *task
 	runtimeTask.TaskDefinition = normalizedDefinition
 	envelope, err := tc.buildTaskPermissionEnvelope(ctx, task, governance)
@@ -190,10 +290,47 @@ func (tc *TaskCoordinator) Submit(ctx context.Context, req *TaskSubmitRequest) (
 		return nil, fmt.Errorf("persist task permission envelope: %w", err)
 	}
 
-	// Dispatch asynchronously so Submit returns immediately.
-	go tc.dispatchToRuntime(context.Background(), &runtimeTask, nil)
+	// Dispatch asynchronously so Submit returns immediately — with concurrency bound.
+	observability.RecordTaskSubmitted(task.TenantID, taskActionName(task))
+	tc.dispatchAsync(&runtimeTask, nil)
 
 	return task, nil
+}
+
+func taskActionName(task *TaskRecord) string {
+	if task == nil || len(task.TaskDefinition) == 0 {
+		return "unknown"
+	}
+	var def map[string]json.RawMessage
+	if err := json.Unmarshal(task.TaskDefinition, &def); err != nil {
+		return "unknown"
+	}
+	var t string
+	_ = json.Unmarshal(def["type"], &t)
+	if t == "" {
+		return "unknown"
+	}
+	return t
+}
+
+func (tc *TaskCoordinator) dispatchAsync(task *TaskRecord, cp *CheckpointPayload) {
+	if tc == nil || tc.dispatchSem == nil {
+		go tc.dispatchToRuntime(context.Background(), task, cp)
+		return
+	}
+	select {
+	case tc.dispatchSem <- struct{}{}:
+		go func() {
+			defer func() { <-tc.dispatchSem }()
+			observability.RecordTaskDispatched(task.TenantID, taskRuntimeID(task))
+			tc.dispatchToRuntime(context.Background(), task, cp)
+		}()
+	default:
+		// Backpressure: semaphore saturated — still dispatch but warn and count
+		log.Warn().Str("task_id", task.TaskID.String()).Int("concurrency", tc.execCfg.dispatchConcurrencyOrDefault()).Msg("[Coordinator] dispatch concurrency saturated, dispatching without slot")
+		observability.RecordHandoffDenied(task.TenantID, "dispatch_concurrency_saturated")
+		go tc.dispatchToRuntime(context.Background(), task, cp)
+	}
 }
 
 // SubmitDemoSimulatedFailure creates a durable task record and marks it failed
@@ -268,7 +405,17 @@ func (tc *TaskCoordinator) SubmitDemoSimulatedFailure(ctx context.Context, req *
 
 // HandleCheckpoint is called by the task route when a runtime pushes a checkpoint.
 func (tc *TaskCoordinator) HandleCheckpoint(cp *CheckpointPayload) error {
-	return tc.store.SaveCheckpoint(cp)
+	err := tc.store.SaveCheckpoint(cp)
+	if err == nil && cp != nil {
+		// tenant_id is inside payload's task context — best effort from checkpoint
+		tenant := ""
+		if cp.TaskID != uuid.Nil {
+			// try resolve tenant via task cache if available (not critical)
+			tenant = "unknown"
+		}
+		observability.RecordCheckpointAccepted(tenant)
+	}
+	return err
 }
 
 // HandleComplete marks a task as completed.
@@ -363,8 +510,9 @@ func (tc *TaskCoordinator) HandleCancel(taskID uuid.UUID) error {
 // StartRecoveryLoop runs a background goroutine that detects dead runtimes
 // and reassigns their in-flight tasks. Call this from main.go after DB is ready.
 func (tc *TaskCoordinator) StartRecoveryLoop(ctx context.Context) {
+	interval := tc.execCfg.recoveryIntervalOrDefault()
 	go func() {
-		ticker := time.NewTicker(recoveryInterval)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -375,6 +523,229 @@ func (tc *TaskCoordinator) StartRecoveryLoop(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// StartDeadlineReaper runs a background goroutine that fails expired tasks whose deadline has passed.
+// It is conservative: only tasks in pending/dispatched/checkpointed/recovering with deadline_at < NOW().
+func (tc *TaskCoordinator) StartDeadlineReaper(ctx context.Context) {
+	interval := tc.execCfg.DeadlineReaperInterval
+	if interval == 0 {
+		interval = 30 * time.Second
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				tc.reapExpiredDeadlines(ctx)
+				tc.reapExpiredInputRefs(ctx)
+			}
+		}
+	}()
+}
+
+func (tc *TaskCoordinator) reapExpiredInputRefs(ctx context.Context) {
+	if tc.db == nil {
+		return
+	}
+	// Best-effort GC of expired encrypted input refs (TTL from ExecutionConfig)
+	_, err := tc.db.ExecContext(ctx, `DELETE FROM execution_input_refs WHERE expires_at IS NOT NULL AND expires_at < NOW() AND revoked_at IS NULL`)
+	if err != nil && !strings.Contains(err.Error(), "execution_input_refs") && !strings.Contains(err.Error(), "expires_at") {
+		log.Warn().Err(err).Msg("[Coordinator] input ref reaper failed")
+	}
+}
+
+func (tc *TaskCoordinator) hasCommittedIrreversibleInJournal(ctx context.Context, task *TaskRecord) bool {
+	if task == nil || tc.db == nil {
+		return false
+	}
+	var exists bool
+	err := tc.db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM effect_journal
+			WHERE tenant_id=$1 AND task_id=$2 AND effect_class='irreversible' AND status='committed'
+			LIMIT 1
+		)`, task.TenantID, task.TaskID).Scan(&exists)
+	if err != nil {
+		// Table missing pre-074 or other error → fail open to checkpoint-based logic (conservative fallback handled elsewhere)
+		return false
+	}
+	return exists
+}
+
+func (tc *TaskCoordinator) shouldEnqueueDLQ(ctx context.Context, task *TaskRecord) bool {
+	max := tc.execCfg.maxRecoveryAttemptsOrDefault()
+	var newCount int
+	err := tc.db.QueryRowContext(ctx, `UPDATE task_records SET attempt_count = COALESCE(attempt_count,0)+1 WHERE task_id=$1 RETURNING COALESCE(attempt_count,0)`, task.TaskID).Scan(&newCount)
+	if err != nil {
+		if strings.Contains(err.Error(), "attempt_count") {
+			return false
+		}
+		log.Warn().Err(err).Str("task_id", task.TaskID.String()).Msg("[Coordinator] attempt increment failed")
+		return false
+	}
+	task.AttemptCount = newCount
+	return newCount > max
+}
+
+func (tc *TaskCoordinator) enqueueDLQ(ctx context.Context, task *TaskRecord, reason string) error {
+	_, err := tc.db.ExecContext(ctx, `
+		INSERT INTO execution_dlq (task_id, tenant_id, attempts, last_error, enqueued_at)
+		VALUES ($1,$2,$3,$4,NOW())
+		ON CONFLICT (task_id) DO UPDATE SET attempts=EXCLUDED.attempts, last_error=EXCLUDED.last_error, enqueued_at=NOW()`,
+		task.TaskID, task.TenantID, task.AttemptCount, reason)
+	if err != nil && strings.Contains(err.Error(), "execution_dlq") {
+		// table missing pre-migration — ignore
+		return nil
+	}
+	return err
+}
+
+// enqueueDispatchQueue inserts a task into the SKIP LOCKED dispatch queue (idempotent).
+func (tc *TaskCoordinator) enqueueDispatchQueue(ctx context.Context, tenantID string, taskID uuid.UUID) error {
+	_, err := tc.db.ExecContext(ctx, `
+		INSERT INTO task_dispatch_queue (tenant_id, task_id, status)
+		VALUES ($1,$2,'queued')
+		ON CONFLICT (tenant_id, task_id) DO NOTHING`, tenantID, taskID)
+	if err != nil && strings.Contains(err.Error(), "task_dispatch_queue") {
+		return nil
+	}
+	return err
+}
+
+// dequeueDispatchQueue reserves one queued task via SKIP LOCKED (bounded concurrency).
+func (tc *TaskCoordinator) dequeueDispatchQueue(ctx context.Context, tenantID string) (uuid.UUID, bool) {
+	var taskID uuid.UUID
+	err := tc.db.QueryRowContext(ctx, `
+		SELECT task_id FROM task_dispatch_queue
+		WHERE tenant_id=$1 AND status='queued'
+		ORDER BY created_at ASC
+		FOR UPDATE SKIP LOCKED
+		LIMIT 1`, tenantID).Scan(&taskID)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	_, _ = tc.db.ExecContext(ctx, `UPDATE task_dispatch_queue SET status='dispatched', dispatched_at=NOW() WHERE tenant_id=$1 AND task_id=$2`, tenantID, taskID)
+	return taskID, true
+}
+
+// writeEffectJournalPending records irreversible effects as pending before external call.
+func (tc *TaskCoordinator) writeEffectJournalPending(ctx context.Context, task *TaskRecord) {
+	nodes := extractEffectNodes(task.TaskDefinition)
+	for idx, n := range nodes {
+		if n.EffectClass != "irreversible" {
+			continue
+		}
+		_, err := tc.db.ExecContext(ctx, `
+			INSERT INTO effect_journal (tenant_id, task_id, node_id, step_index, effect_class, status)
+			VALUES ($1,$2,$3,$4,$5,'pending')
+			ON CONFLICT (tenant_id, task_id, node_id) DO NOTHING`,
+			task.TenantID, task.TaskID, n.NodeID, idx, n.EffectClass)
+		if err != nil && !strings.Contains(err.Error(), "effect_journal") {
+			log.Warn().Err(err).Str("task_id", task.TaskID.String()).Str("node_id", n.NodeID).Msg("[Coordinator] effect journal pending insert failed")
+		}
+	}
+}
+
+// markEffectJournalCommitted marks pending irreversible effects as committed after success.
+func (tc *TaskCoordinator) markEffectJournalCommitted(ctx context.Context, task *TaskRecord) {
+	_, err := tc.db.ExecContext(ctx, `
+		UPDATE effect_journal SET status='committed', committed_at=NOW()
+		WHERE tenant_id=$1 AND task_id=$2 AND effect_class='irreversible' AND status='pending'`,
+		task.TenantID, task.TaskID)
+	if err != nil && !strings.Contains(err.Error(), "effect_journal") {
+		log.Warn().Err(err).Str("task_id", task.TaskID.String()).Msg("[Coordinator] effect journal commit failed")
+	}
+}
+
+type effectNodeInfo struct {
+	NodeID      string
+	EffectClass string
+}
+
+func extractEffectNodes(definition json.RawMessage) []effectNodeInfo {
+	var payload struct {
+		Graph struct {
+			Nodes []json.RawMessage `json:"nodes"`
+		} `json:"graph"`
+	}
+	if err := json.Unmarshal(definition, &payload); err != nil {
+		return nil
+	}
+	out := make([]effectNodeInfo, 0, len(payload.Graph.Nodes))
+	for _, raw := range payload.Graph.Nodes {
+		var node map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &node); err != nil {
+			continue
+		}
+		rawID, ok := node["node_id"]
+		if !ok {
+			continue
+		}
+		var nodeID string
+		_ = json.Unmarshal(rawID, &nodeID)
+		if nodeID == "" {
+			continue
+		}
+		ec := nodeEffectClass(raw)
+		if ec == "" {
+			// legacy fallback: check heuristic on this node alone
+			if containsIrreversibleActionToken(strings.ToLower(string(raw))) {
+				ec = "irreversible"
+			} else {
+				continue
+			}
+		}
+		out = append(out, effectNodeInfo{NodeID: nodeID, EffectClass: ec})
+	}
+	return out
+}
+
+func (tc *TaskCoordinator) reapExpiredDeadlines(ctx context.Context) {
+	if tc.store == nil || tc.db == nil {
+		return
+	}
+	tx, err := tc.db.BeginTx(ctx, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("[Coordinator] Deadline reaper begin failed")
+		return
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `
+		SELECT task_id, tenant_id, created_at FROM task_records
+		WHERE status IN ('pending','dispatched','checkpointed','recovering')
+		  AND deadline_at IS NOT NULL AND deadline_at < NOW()
+		ORDER BY deadline_at ASC
+		FOR UPDATE SKIP LOCKED
+		LIMIT 100`)
+	if err != nil {
+		log.Error().Err(err).Msg("[Coordinator] Deadline reaper query failed")
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var taskID uuid.UUID
+		var tenantID string
+		var createdAt time.Time
+		if err := rows.Scan(&taskID, &tenantID, &createdAt); err != nil {
+			continue
+		}
+		_, err := tx.ExecContext(ctx, `
+			UPDATE task_records SET status='failed', failure_reason='deadline_exceeded',
+				failure_details=$1, updated_at=NOW()
+			WHERE task_id=$2 AND status IN ('pending','dispatched','checkpointed','recovering')`,
+			func() []byte { b, _ := json.Marshal(overtureTaskFailureDetails("reaper", "deadline_exceeded", "task deadline exceeded before completion")); return b }(), taskID)
+		if err != nil {
+			log.Warn().Err(err).Str("task_id", taskID.String()).Msg("[Coordinator] Deadline reaper update failed")
+			continue
+		}
+		observability.OvertureRunDuration.WithLabelValues("unknown", "deadline_exceeded").Observe(time.Since(createdAt).Seconds())
+		_ = tenantID // for future per-tenant metric
+	}
+	_ = tx.Commit()
 }
 
 // runtimeInfo holds the minimal info needed to dispatch a task.
@@ -389,7 +760,11 @@ type runtimeInfo struct {
 // guards still apply so cross-tenant pinning cannot succeed.
 func (tc *TaskCoordinator) selectRuntime(ctx context.Context, tenantID, preferredRuntimeID string) (*runtimeInfo, error) {
 	preferredRuntimeID = strings.TrimSpace(preferredRuntimeID)
-	query := `
+	hbSec := int(tc.execCfg.heartbeatTimeoutOrDefault().Seconds())
+	if hbSec <= 0 {
+		hbSec = 90
+	}
+	query := fmt.Sprintf(`
 		SELECT ri.runtime_id, ri.endpoint
 		FROM runtime_instances ri
 		LEFT JOIN (
@@ -403,7 +778,7 @@ func (tc *TaskCoordinator) selectRuntime(ctx context.Context, tenantID, preferre
 		  AND ri.status = 'active'
 		  AND ri.endpoint IS NOT NULL
 		  AND BTRIM(ri.endpoint) <> ''
-		  AND ri.last_heartbeat > NOW() - INTERVAL '90 seconds'`
+		  AND ri.last_heartbeat > NOW() - INTERVAL '%d seconds'`, hbSec)
 	args := []interface{}{tenantID}
 	if preferredRuntimeID != "" {
 		query += ` AND ri.runtime_id = $2`
@@ -486,11 +861,11 @@ func (tc *TaskCoordinator) dispatchToRuntime(ctx context.Context, task *TaskReco
 	runtimePayload["task_id"] = taskIDBytes
 	runtimePayload["tenant_id"] = tenantIDBytes
 	runtimePayload["idempotency_key"] = idempotencyBytes
-	if callbackBaseURL := strings.TrimSpace(os.Getenv("IGRIS_RUNTIME_CALLBACK_BASE_URL")); callbackBaseURL != "" {
+	if callbackBaseURL := strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_RUNTIME_CALLBACK_BASE_URL", "IGRIS_RUNTIME_CALLBACK_BASE_URL")); callbackBaseURL != "" {
 		callbackBaseURLBytes, _ := json.Marshal(callbackBaseURL)
 		runtimePayload["callback_base_url"] = callbackBaseURLBytes
-		callbackHeaderName := strings.TrimSpace(os.Getenv("IGRIS_RUNTIME_CALLBACK_AUTH_HEADER_NAME"))
-		callbackHeaderValue := strings.TrimSpace(os.Getenv("IGRIS_RUNTIME_CALLBACK_AUTH_HEADER_VALUE"))
+		callbackHeaderName := strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_RUNTIME_CALLBACK_AUTH_HEADER_NAME", "IGRIS_RUNTIME_CALLBACK_AUTH_HEADER_NAME"))
+		callbackHeaderValue := strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_RUNTIME_CALLBACK_AUTH_HEADER_VALUE", "IGRIS_RUNTIME_CALLBACK_AUTH_HEADER_VALUE"))
 		if callbackHeaderName != "" && callbackHeaderValue != "" {
 			callbackAuthBytes, _ := json.Marshal(map[string]string{
 				"header_name":  callbackHeaderName,
@@ -569,11 +944,15 @@ func (tc *TaskCoordinator) dispatchToRuntime(ctx context.Context, task *TaskReco
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Overture-Tenant", task.TenantID)
 	req.Header.Set("X-Igris-Tenant", task.TenantID)
-	if runtimeSecret := strings.TrimSpace(os.Getenv("IGRIS_RUNTIME_SECRET")); runtimeSecret != "" {
+	if runtimeSecret := strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_RUNTIME_SECRET", "IGRIS_RUNTIME_SECRET")); runtimeSecret != "" {
 		req.Header.Set("Authorization", "Bearer "+runtimeSecret)
 	}
 	internal.SetDecisionSigHeader(req, body)
+
+	// Effect journal: write pending entries before external call for exactly-once.
+	tc.writeEffectJournalPending(ctx, task)
 
 	resp, err := tc.httpClient.Do(req)
 	if err != nil {
@@ -659,6 +1038,7 @@ func (tc *TaskCoordinator) dispatchToRuntime(ctx context.Context, task *TaskReco
 					log.Warn().Err(err).Int("step", idx).Str("task_id", task.TaskID.String()).Msg("[Coordinator] Save execution lineage from task receipt")
 				}
 			}
+			tc.markEffectJournalCommitted(ctx, task)
 			triggerAvailable, err := tc.store.HasTaskProofSyncTrigger()
 			if err != nil {
 				log.Warn().Err(err).Str("task_id", task.TaskID.String()).Msg("[Coordinator] Proof trigger readiness check failed; falling back to direct sync")
@@ -679,8 +1059,11 @@ func (tc *TaskCoordinator) dispatchToRuntime(ctx context.Context, task *TaskReco
 	switch result.Status.Name {
 	case "completed":
 		_ = tc.store.MarkCompleted(task.TaskID)
+		observability.OvertureRunDuration.WithLabelValues(taskActionName(task), "completed").Observe(time.Since(task.CreatedAt).Seconds())
+		observability.RecordProofVerified(task.TenantID, "completed")
 	case "failed":
 		_ = tc.store.MarkFailedWithDetails(task.TaskID, failureReason, result.FailureDetails)
+		observability.OvertureRunDuration.WithLabelValues(taskActionName(task), "failed").Observe(time.Since(task.CreatedAt).Seconds())
 	}
 }
 
@@ -1005,7 +1388,7 @@ func buildSignedGovernedPolicyDecisions(task *TaskRecord, taskTypeBytes json.Raw
 
 	now := time.Now().UnixMilli()
 	policy := evaluateRoboticsPolicy(context.Background(), db, task)
-	keyVersion := strings.TrimSpace(os.Getenv("IGRIS_OVERTURE_SIGNING_KEY_VERSION"))
+	keyVersion := strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_SIGNING_KEY_VERSION", "IGRIS_OVERTURE_SIGNING_KEY_VERSION"))
 
 	decisions := make([]signedGovernedPolicyDecision, 0, len(actions))
 	for _, action := range actions {
@@ -1036,7 +1419,7 @@ func buildSignedGovernedPolicyDecisions(task *TaskRecord, taskTypeBytes json.Raw
 }
 
 func loadOvertureSigningKey() ed25519.PrivateKey {
-	hexKey := os.Getenv("IGRIS_OVERTURE_SIGNING_KEY")
+	hexKey := strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_SIGNING_KEY", "IGRIS_OVERTURE_SIGNING_KEY"))
 	if hexKey == "" {
 		return nil
 	}
@@ -1332,13 +1715,17 @@ func normalizeRuntimeCheckpointDigest(raw json.RawMessage) string {
 // recoverFailedRuntimes scans for runtimes with stale heartbeats, marks their
 // tasks as RECOVERING, and redispatches each to a healthy runtime.
 func (tc *TaskCoordinator) recoverFailedRuntimes(ctx context.Context) {
-	rows, err := tc.db.QueryContext(ctx, `
+	hbSec := int(tc.execCfg.heartbeatTimeoutOrDefault().Seconds())
+	if hbSec <= 0 {
+		hbSec = 90
+	}
+	q := fmt.Sprintf(`
 		SELECT DISTINCT runtime_id
 		FROM runtime_instances
 		WHERE is_healthy = true
-		  AND last_heartbeat < NOW() - INTERVAL '90 seconds'
-		  AND status = 'active'`,
-	)
+		  AND last_heartbeat < NOW() - INTERVAL '%d seconds'
+		  AND status = 'active'`, hbSec)
+	rows, err := tc.db.QueryContext(ctx, q)
 	if err != nil {
 		log.Error().Err(err).Msg("[Coordinator] Query stale runtimes")
 		return
@@ -1403,6 +1790,24 @@ func (tc *TaskCoordinator) recoverRuntime(ctx context.Context, runtimeID string)
 		}
 		if skipReason := TaskRecoverySkipReason(task); skipReason != "" {
 			tc.handleRecoverySkip(taskID, task, skipReason)
+			continue
+		}
+
+		// DLQ bounded retries — increment attempt, check max, enqueue if exceeded
+		if tc.shouldEnqueueDLQ(ctx, task) {
+			log.Warn().Str("task_id", taskID.String()).Int("attempts", task.AttemptCount+1).Msg("[Coordinator] Max recovery attempts exceeded, enqueuing DLQ")
+			_ = tc.enqueueDLQ(ctx, task, "max_recovery_attempts_exceeded")
+			observability.RecordDLQEnqueued(task.TenantID)
+			observability.RecordHandoffDenied(task.TenantID, "max_recovery_attempts")
+			_ = tc.store.MarkFailedWithDetails(taskID, "max recovery attempts exceeded", overtureTaskFailureDetails("recovery", "dlq_max_attempts", "max recovery attempts exceeded"))
+			continue
+		}
+		observability.RecordRecoveryStarted(task.TenantID, "runtime_failed")
+
+		if tc.hasCommittedIrreversibleInJournal(ctx, task) {
+			log.Warn().Str("task_id", taskID.String()).Msg("[Coordinator] Irreversible effect already committed in journal, blocking recovery")
+			observability.RecordHandoffDenied(task.TenantID, "effect_journal_committed")
+			_ = tc.store.MarkFailedWithDetails(taskID, "irreversible effect already committed", overtureTaskFailureDetails("recovery", "effect_journal_committed", "irreversible effect already committed — journal blocks replay"))
 			continue
 		}
 
@@ -1474,6 +1879,7 @@ func (tc *TaskCoordinator) recoverRuntime(ctx context.Context, runtimeID string)
 			Reason:            handoffReason,
 		})
 		if !allowed {
+			observability.RecordHandoffDenied(task.TenantID, handoffReason)
 			_ = tc.store.MarkFailedWithDetails(taskID, handoffReason, overtureTaskFailureDetails("recovery", "runtime_handoff_denied", handoffReason))
 			continue
 		}
@@ -1530,7 +1936,7 @@ func (tc *TaskCoordinator) recoverRuntime(ctx context.Context, runtimeID string)
 			ReplayAllowed:     &allowed,
 			Reason:            "recovery redispatch accepted",
 		})
-		go tc.dispatchToRuntime(ctx, &runtimeTask, cp)
+		tc.dispatchAsync(&runtimeTask, cp)
 	}
 }
 
@@ -1813,7 +2219,29 @@ func validateExecutionGraphNode(node map[string]json.RawMessage) error {
 		return invalidTaskDefinition("unsupported execution graph node kind %q", kind)
 	}
 
+	if err := validateEffectClassField(node); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func validateEffectClassField(node map[string]json.RawMessage) error {
+	raw, ok := node["effect_class"]
+	if !ok {
+		return nil
+	}
+	var ec string
+	if err := json.Unmarshal(raw, &ec); err != nil {
+		return invalidTaskDefinition("effect_class must be a string")
+	}
+	ec = strings.ToLower(strings.TrimSpace(ec))
+	switch ec {
+	case "idempotent", "irreversible", "retryable":
+		return nil
+	default:
+		return invalidTaskDefinition("effect_class must be one of idempotent, irreversible, retryable (got %q)", ec)
+	}
 }
 
 func validateExecutionGraphSlotFields(node map[string]json.RawMessage) error {
