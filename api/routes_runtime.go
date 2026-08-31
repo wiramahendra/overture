@@ -26,9 +26,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/billing"
-	"github.com/Igris-inertial/system/igris-overture/internal"
-	"github.com/Igris-inertial/system/igris-overture/security"
+	"github.com/wiramahendra/overture/billing"
+	"github.com/wiramahendra/overture/internal"
+	"github.com/wiramahendra/overture/security"
 )
 
 const runtimeRequestTimestampWindow = 5 * time.Minute
@@ -203,7 +203,7 @@ func (h *RuntimeHandler) Register(c *fiber.Ctx) error {
 						"message":     "Runtime limit reached for your subscription tier",
 						"tier":        tier,
 						"limit":       limit,
-						"upgrade_url": "https://igrisinertial.com/pricing",
+						"upgrade_url": "https://overture.example/pricing",
 					})
 				}
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
