@@ -18,7 +18,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Igris-inertial/system/igris-overture/security"
+	"github.com/wiramahendra/overture/security"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
 )
