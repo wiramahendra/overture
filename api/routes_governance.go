@@ -14,8 +14,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/coordinator"
+	"github.com/wiramahendra/overture/middleware"
 )
 
 // RegisterGovernanceRoutes wires the execution governance summary endpoints.
