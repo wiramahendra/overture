@@ -10,8 +10,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Igris-inertial/system/igris-overture/middleware"
-	"github.com/Igris-inertial/system/igris-overture/security"
+	"github.com/wiramahendra/overture/middleware"
+	"github.com/wiramahendra/overture/security"
 )
 
 // These tests lock in the behavior that BetterAuth accepts an `igris_`-prefixed
