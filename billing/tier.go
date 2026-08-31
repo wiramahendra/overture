@@ -1,4 +1,6 @@
-// Package billing provides canonical tier definitions for Igris Inertial subscriptions.
+// Package billing provides canonical tier definitions for Overture subscriptions (flat model).
+// Flat model is canonical: seed 3 runtimes $29, horizon 50 runtimes $149, infinite 500 runtimes $699.
+// Per-device $49/device design in LICENSE_SYSTEM_DESIGN.md is archived — not active.
 package billing
 
 // Tier is the canonical subscription tier type used everywhere in backend code.
