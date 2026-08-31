@@ -20,8 +20,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/billing"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/billing"
+	"github.com/wiramahendra/overture/middleware"
 )
 
 // downloadRateLimit is the maximum downloads per tenant per hour.
@@ -125,7 +125,7 @@ func (h *DownloadHandler) Download(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error":       "subscription_required",
 			"message":     "An active Igris subscription is required to download the runtime",
-			"upgrade_url": "https://igrisinertial.com/pricing",
+			"upgrade_url": "https://overture.example/pricing",
 		})
 	}
 
