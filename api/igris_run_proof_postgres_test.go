@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
-	"github.com/Igris-inertial/system/igris-overture/internal/canonicaljson"
+	"github.com/wiramahendra/overture/coordinator"
+	"github.com/wiramahendra/overture/internal/canonicaljson"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
