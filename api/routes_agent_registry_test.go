@@ -15,8 +15,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Igris-inertial/system/igris-overture/agentregistry"
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
+	"github.com/wiramahendra/overture/agentregistry"
+	"github.com/wiramahendra/overture/coordinator"
 )
 
 func TestHandleAgentRegistryCreateRejectsBodyTenantOverride(t *testing.T) {
