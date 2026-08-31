@@ -47,8 +47,31 @@ proof = run.proof()
 ## Run locally
 
 ```bash
-go run ./cmd/server
-# Postgres + Redis required - see docs/product/PRD.md
+# With Docker (Postgres + Redis + Overture) — provider-agnostic, local dev
+docker compose up --build
+
+# Or bare binary (any Postgres via DATABASE_URL)
+go run ./cmd/server server
+# Postgres + Redis — see DEPLOY.md (generic: DATABASE_URL)
+
+# Python SDK
+pip install ./sdk/python
+python -c "from overture import Overture; print(Overture)"
+# Legacy import still works: from igris import Igris
+```
+
+## Deploy
+
+Provider-agnostic: `DEPLOY.md` (single `DATABASE_URL`, any Postgres/Redis/container platform)
+Local Docker: `docker-compose.yml` (dev only)
+
+## Renaming note
+
+This repo was `Igris-inertial/system` (`igris-overture`). Canonical name is now **Overture** (`github.com/wiramahendra/overture`).
+- Go module: `github.com/wiramahendra/overture`
+- SDK: `overture-sdk` (`import overture`), legacy `igris` shim remains
+- Env vars: `OVERTURE_*` canonical, `IGRIS_*` fallback supported (see `cmd/server/main.go: shimEnv`)
+- Prefix: `overture_` canonical API keys, `igris_` accepted for compat
 ```
 
 ## What this is not
