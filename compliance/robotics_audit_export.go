@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
+	"github.com/wiramahendra/overture/coordinator"
 )
 
 type PolicyKeyLifecycleAuditRecord struct {
