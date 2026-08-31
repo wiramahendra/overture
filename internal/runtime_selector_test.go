@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Igris-inertial/system/igris-overture/models"
+	"github.com/wiramahendra/overture/models"
 )
 
 // ============================================================================
