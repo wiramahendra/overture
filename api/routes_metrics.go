@@ -3,10 +3,10 @@ package api
 import (
 	"log"
 
-	"github.com/Igris-inertial/system/igris-overture/database"
-	"github.com/Igris-inertial/system/igris-overture/metrics"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
-	"github.com/Igris-inertial/system/igris-overture/tracing"
+	"github.com/wiramahendra/overture/database"
+	"github.com/wiramahendra/overture/metrics"
+	"github.com/wiramahendra/overture/middleware"
+	"github.com/wiramahendra/overture/tracing"
 	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
