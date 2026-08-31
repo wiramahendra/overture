@@ -13,7 +13,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Igris-inertial/system/igris-overture/executionevals"
+	"github.com/wiramahendra/overture/executionevals"
 )
 
 func TestExecutionEvalCreateRejectsTenantOverride(t *testing.T) {
