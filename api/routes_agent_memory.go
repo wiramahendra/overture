@@ -12,9 +12,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
-	"github.com/Igris-inertial/system/igris-overture/agentmemory"
-	"github.com/Igris-inertial/system/igris-overture/agentregistry"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/agentmemory"
+	"github.com/wiramahendra/overture/agentregistry"
+	"github.com/wiramahendra/overture/middleware"
 )
 
 // RegisterAgentMemoryRoutes exposes summary-only evidence memory. This route
