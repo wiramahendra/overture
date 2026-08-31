@@ -9,8 +9,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/Igris-inertial/system/igris-overture/agentregistry"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/agentregistry"
+	"github.com/wiramahendra/overture/middleware"
 )
 
 // RegisterAgentRegistryRoutes exposes tenant-scoped Agent Registry CRUD and the
