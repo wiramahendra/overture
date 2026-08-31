@@ -12,7 +12,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/observability"
+	"github.com/wiramahendra/overture/observability"
 )
 
 // RoutingIntegration provides integration between routing and decision signing
