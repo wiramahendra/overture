@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/models"
+	"github.com/wiramahendra/overture/models"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
