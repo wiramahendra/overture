@@ -6,8 +6,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/Igris-inertial/system/igris-overture/actionpack"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/actionpack"
+	"github.com/wiramahendra/overture/middleware"
 )
 
 // RegisterActionPackRoutes exposes built-in Action Pack listing and install.
