@@ -17,10 +17,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
-	"github.com/Igris-inertial/system/igris-overture/internal"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
-	"github.com/Igris-inertial/system/igris-overture/models"
+	"github.com/wiramahendra/overture/coordinator"
+	"github.com/wiramahendra/overture/internal"
+	"github.com/wiramahendra/overture/middleware"
+	"github.com/wiramahendra/overture/models"
 )
 
 type publicTaskSubmitRequest struct {
@@ -1826,7 +1826,7 @@ func lookupRuntimePublicKeyForTask(ctx context.Context, tc *coordinator.TaskCoor
 			return strings.TrimSpace(key)
 		}
 	}
-	return strings.TrimSpace(os.Getenv("IGRIS_RUNTIME_PUBLIC_KEY"))
+	return strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_RUNTIME_PUBLIC_KEY", "IGRIS_RUNTIME_PUBLIC_KEY"))
 }
 
 // applyCryptographicProofFields layers fresh-verification flags onto the
