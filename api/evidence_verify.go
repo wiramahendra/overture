@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/internal/canonicaljson"
+	"github.com/wiramahendra/overture/internal/canonicaljson"
 )
 
 const (
