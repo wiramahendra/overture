@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/models"
-	"github.com/Igris-inertial/system/igris-overture/repository"
-	"github.com/Igris-inertial/system/igris-overture/security"
+	"github.com/wiramahendra/overture/models"
+	"github.com/wiramahendra/overture/repository"
+	"github.com/wiramahendra/overture/security"
 )
 
 // ProviderRegistryService handles provider registration and validation
