@@ -14,8 +14,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/metrics"
-	"github.com/Igris-inertial/system/igris-overture/models"
+	"github.com/wiramahendra/overture/metrics"
+	"github.com/wiramahendra/overture/models"
 	"github.com/google/uuid"
 )
 
