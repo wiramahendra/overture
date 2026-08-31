@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Igris-inertial/system/igris-overture/models"
+	"github.com/wiramahendra/overture/models"
 	"github.com/google/uuid"
 )
 
