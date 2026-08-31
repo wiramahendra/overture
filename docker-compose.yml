@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: overture
+      POSTGRES_PASSWORD: overture
+      POSTGRES_DB: overture
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U overture"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  overture:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ENV: development
+      PORT: 8080
+      DATABASE_URL: postgres://overture:overture@postgres:5432/overture?sslmode=disable
+      DATABASE_URL_DIRECT: postgres://overture:overture@postgres:5432/overture?sslmode=disable
+      ENABLE_PERSISTENCE: "true"
+      DB_FAIL_FAST: "true"
+      REDIS_URL: redis://redis:6379/0
+      USE_REDIS: "true"
+      BETTER_AUTH_SECRET: dev-secret-change-me
+      ALLOWED_ORIGINS: "*"
+      CORS_ORIGINS: "*"
+      OVERTURE_RUNTIME_PUBLIC_KEY: ""
+      OVERTURE_SIGNING_KEY: ""
+    ports:
+      - "8080:8080"
+    command: ["server"]
+
+volumes:
+  pgdata:
