@@ -24,7 +24,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
+	"github.com/wiramahendra/overture/coordinator"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
