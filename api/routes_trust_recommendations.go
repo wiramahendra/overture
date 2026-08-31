@@ -13,9 +13,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/Igris-inertial/system/igris-overture/middleware"
-	"github.com/Igris-inertial/system/igris-overture/policyproposals"
-	"github.com/Igris-inertial/system/igris-overture/trustrecs"
+	"github.com/wiramahendra/overture/middleware"
+	"github.com/wiramahendra/overture/policyproposals"
+	"github.com/wiramahendra/overture/trustrecs"
 )
 
 // RegisterTrustRecommendationRoutes exposes a read-only, deterministic list of
