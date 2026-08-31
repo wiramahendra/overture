@@ -11,7 +11,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/Igris-inertial/system/igris-overture/internal"
+	"github.com/wiramahendra/overture/internal"
 )
 
 func TestExpectedHashFromVerifyRequest(t *testing.T) {
