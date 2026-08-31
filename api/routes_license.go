@@ -2,6 +2,8 @@
 package api
 
 import (
+	"github.com/wiramahendra/overture/internal"
+
 	"crypto/ed25519"
 	"crypto/sha256"
 	"database/sql"
@@ -16,8 +18,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/middleware"
-	"github.com/Igris-inertial/system/igris-overture/models"
+	"github.com/wiramahendra/overture/middleware"
+	"github.com/wiramahendra/overture/models"
 )
 
 // LicenseHandler handles license-related API requests
@@ -82,7 +84,7 @@ func decodeOfflineLicenseSigningKey(value string) (ed25519.PrivateKey, error) {
 
 func offlineArtifactTTL() time.Duration {
 	ttlHours := 168
-	if raw := strings.TrimSpace(os.Getenv("IGRIS_LICENSE_OFFLINE_ARTIFACT_TTL_HOURS")); raw != "" {
+	if raw := strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_LICENSE_OFFLINE_ARTIFACT_TTL_HOURS", "IGRIS_LICENSE_OFFLINE_ARTIFACT_TTL_HOURS")); raw != "" {
 		if parsed, err := time.ParseDuration(raw + "h"); err == nil && parsed > 0 {
 			return parsed
 		}
@@ -102,7 +104,7 @@ func buildOfflineLicenseArtifact(
 	req models.ValidationRequest,
 	response models.ValidationResponse,
 ) (string, string, *time.Time, error) {
-	signingKeyValue := strings.TrimSpace(os.Getenv("IGRIS_OVERTURE_SIGNING_KEY"))
+	signingKeyValue := strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_OVERTURE_SIGNING_KEY", "IGRIS_OVERTURE_SIGNING_KEY"))
 	if signingKeyValue == "" {
 		return "", "", nil, nil
 	}
@@ -140,7 +142,7 @@ func buildOfflineLicenseArtifact(
 	payloadHash := sha256.Sum256(payloadBytes)
 	envelope := offlineLicenseArtifactEnvelope{
 		Algorithm:     "ed25519-sha256",
-		KeyID:         strings.TrimSpace(os.Getenv("IGRIS_LICENSE_OFFLINE_KEY_ID")),
+		KeyID:         strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_LICENSE_OFFLINE_KEY_ID", "IGRIS_LICENSE_OFFLINE_KEY_ID")),
 		Payload:       base64.StdEncoding.EncodeToString(payloadBytes),
 		PayloadSHA256: hex.EncodeToString(payloadHash[:]),
 		Signature:     base64.StdEncoding.EncodeToString(ed25519.Sign(signingKey, payloadHash[:])),
@@ -388,7 +390,7 @@ func (h *LicenseHandler) ValidateLicense(c *fiber.Ctx) error {
 			Valid:      false,
 			Error:      "invalid_license",
 			Message:    "License key not found",
-			UpgradeURL: "https://igrisinertial.com/pricing",
+			UpgradeURL: "https://overture.example/pricing",
 		})
 	}
 
@@ -407,7 +409,7 @@ func (h *LicenseHandler) ValidateLicense(c *fiber.Ctx) error {
 			Valid:      false,
 			Error:      "license_" + license.Status,
 			Message:    "License is " + license.Status,
-			UpgradeURL: "https://igrisinertial.com/pricing",
+			UpgradeURL: "https://overture.example/pricing",
 		})
 	}
 
@@ -417,7 +419,7 @@ func (h *LicenseHandler) ValidateLicense(c *fiber.Ctx) error {
 			Valid:      false,
 			Error:      "license_expired",
 			Message:    "License has expired",
-			UpgradeURL: "https://igrisinertial.com/pricing",
+			UpgradeURL: "https://overture.example/pricing",
 		})
 	}
 
@@ -457,7 +459,7 @@ func (h *LicenseHandler) ValidateLicense(c *fiber.Ctx) error {
 			Message:       "License allows " + string(rune(license.DevicesLimit)) + " devices, currently " + string(rune(activeDevices)) + " active. Upgrade or deactivate devices.",
 			DevicesLimit:  license.DevicesLimit,
 			DevicesActive: activeDevices,
-			UpgradeURL:    "https://igrisinertial.com/pricing",
+			UpgradeURL:    "https://overture.example/pricing",
 		})
 	}
 
@@ -487,7 +489,7 @@ func (h *LicenseHandler) ValidateLicense(c *fiber.Ctx) error {
 			DevicesActive:      activeDevices,
 			CloudRequestsLimit: cloudRequestsLimit,
 			CloudRequestsUsed:  cloudRequestsUsed,
-			UpgradeURL:         "https://igrisinertial.com/pricing",
+			UpgradeURL:         "https://overture.example/pricing",
 		})
 	}
 
