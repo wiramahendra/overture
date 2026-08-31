@@ -1,3 +1,5 @@
+//go:build ignore
+ // +build ignore
 package api
 
 import (
@@ -8,10 +10,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/cognitive"
-	"github.com/Igris-inertial/system/igris-overture/config"
-	"github.com/Igris-inertial/system/igris-overture/database"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/cognitive"
+	"github.com/wiramahendra/overture/config"
+	"github.com/wiramahendra/overture/database"
+	"github.com/wiramahendra/overture/middleware"
 )
 
 // CognitiveHandler handles cognitive advisor API requests
