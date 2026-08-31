@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/models"
+	"github.com/wiramahendra/overture/models"
 	"github.com/google/uuid"
 )
 
@@ -76,28 +76,28 @@ func (r *RuntimeCommandRevokeResult) ResponsePayload() map[string]any {
 // It reads IGRIS_RUNTIME_SECRET and IGRIS_RUNTIME_TIMEOUT from the environment.
 func NewRuntimeClient(baseURL string) *RuntimeClient {
 	timeout := 5 * time.Second
-	if v := os.Getenv("IGRIS_RUNTIME_TIMEOUT"); v != "" {
+	if v := EnvOrLegacy("OVERTURE_RUNTIME_TIMEOUT", "IGRIS_RUNTIME_TIMEOUT"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			timeout = d
 		}
 	}
 	var pubKey ed25519.PublicKey
-	if hexKey := os.Getenv("IGRIS_RUNTIME_PUBLIC_KEY"); hexKey != "" {
-		if decoded, err := hex.DecodeString(hexKey); err == nil && len(decoded) == ed25519.PublicKeySize {
+	if hexKey := EnvOrLegacy("OVERTURE_RUNTIME_PUBLIC_KEY", "IGRIS_RUNTIME_PUBLIC_KEY"); hexKey != "" {
+		if decoded, err := hex.DecodeString(strings.TrimSpace(hexKey)); err == nil && len(decoded) == ed25519.PublicKeySize {
 			pubKey = ed25519.PublicKey(decoded)
 		}
 	}
 
 	var signingKey ed25519.PrivateKey
-	if hexKey := os.Getenv("IGRIS_OVERTURE_SIGNING_KEY"); hexKey != "" {
-		if decoded, err := hex.DecodeString(hexKey); err == nil && len(decoded) == ed25519.PrivateKeySize {
+	if hexKey := EnvOrLegacy("OVERTURE_SIGNING_KEY", "IGRIS_OVERTURE_SIGNING_KEY"); hexKey != "" {
+		if decoded, err := hex.DecodeString(strings.TrimSpace(hexKey)); err == nil && len(decoded) == ed25519.PrivateKeySize {
 			signingKey = ed25519.PrivateKey(decoded)
 		}
 	}
 
 	return &RuntimeClient{
 		baseURL:    baseURL,
-		secret:     os.Getenv("IGRIS_RUNTIME_SECRET"),
+		secret:     EnvOrLegacy("OVERTURE_RUNTIME_SECRET", "IGRIS_RUNTIME_SECRET"),
 		publicKey:  pubKey,
 		signingKey: signingKey,
 		httpClient: &http.Client{
@@ -132,7 +132,7 @@ func setDecisionSigHeaderWithKey(req *http.Request, body []byte, signingKey ed25
 // SetDecisionSigHeader signs a Runtime request body with IGRIS_OVERTURE_SIGNING_KEY
 // and attaches X-Igris-Decision-Sig. It is a no-op when the signing key is absent.
 func SetDecisionSigHeader(req *http.Request, body []byte) {
-	if hexKey := os.Getenv("IGRIS_OVERTURE_SIGNING_KEY"); hexKey != "" {
+	if hexKey := EnvOrLegacy("OVERTURE_OVERTURE_SIGNING_KEY", "IGRIS_OVERTURE_SIGNING_KEY"); hexKey != "" {
 		if decoded, err := hex.DecodeString(hexKey); err == nil && len(decoded) == ed25519.PrivateKeySize {
 			setDecisionSigHeaderWithKey(req, body, ed25519.PrivateKey(decoded))
 		}
@@ -245,11 +245,14 @@ func (c *RuntimeClient) verifyEnvelope(envelope map[string]interface{}) error {
 // Rust's BTreeMap serialization), SHA-256 hashes the result, and verifies the
 // signature with the configured Ed25519 public key.
 //
-// Returns nil when no public key is configured (skip verification), or when
-// the signed field is absent (treated as unsigned / not present). Returns a
-// non-nil error when a key is configured and verification fails.
+// Returns nil when no public key is configured and ENV != production (skip verification),
+// or when the signed field is absent (treated as unsigned / not present). In production,
+// missing public key is a security misconfiguration and returns error (fail-closed).
 func (c *RuntimeClient) verifySignedJSON(record map[string]interface{}, recordName string) error {
 	if len(c.publicKey) == 0 {
+		if os.Getenv("ENV") == "production" || os.Getenv("OVERTURE_ENV") == "production" {
+			return fmt.Errorf("%s verification requires public key in production (OVERTURE_RUNTIME_PUBLIC_KEY not set)", recordName)
+		}
 		return nil
 	}
 
