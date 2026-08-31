@@ -4,7 +4,7 @@ package api
 import (
 	"database/sql"
 
-	"github.com/Igris-inertial/system/igris-overture/scheduler"
+	"github.com/wiramahendra/overture/scheduler"
 )
 
 // NewTelemetryAggregator creates a new telemetry aggregator
