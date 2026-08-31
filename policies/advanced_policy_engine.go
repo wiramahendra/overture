@@ -14,7 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 
-	"github.com/Igris-inertial/system/igris-overture/observability"
+	"github.com/wiramahendra/overture/observability"
 )
 
 // PolicyEngine manages versioned routing policies with hot reload support
