@@ -1,3 +1,5 @@
+//go:build ignore
+ // +build ignore
 // Package api provides frontend-facing API endpoints consumed by the web-console.
 //
 // This file implements all endpoints that the web-console needs but were either
@@ -21,9 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/cognitive"
-	"github.com/Igris-inertial/system/igris-overture/database"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/cognitive"
+	"github.com/wiramahendra/overture/database"
+	"github.com/wiramahendra/overture/middleware"
 	"github.com/gofiber/fiber/v2"
 )
 
