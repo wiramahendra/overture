@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/internal"
+	"github.com/wiramahendra/overture/internal"
 	"github.com/google/uuid"
 )
 
@@ -371,13 +371,47 @@ func classifyTaskAction(definition json.RawMessage) (string, string) {
 	return taskType, strings.Join(actions, ",")
 }
 
+func nodeEffectClass(raw json.RawMessage) string {
+	var node map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &node); err != nil {
+		return ""
+	}
+	ecRaw, ok := node["effect_class"]
+	if !ok {
+		return ""
+	}
+	var ec string
+	if err := json.Unmarshal(ecRaw, &ec); err != nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(ec))
+}
+
 func taskHasIrreversibleAction(definition json.RawMessage) bool {
+	// Prefer explicit effect_class on nodes; fallback to legacy heuristic for backward compat.
+	var payload struct {
+		Graph struct {
+			Nodes []json.RawMessage `json:"nodes"`
+		} `json:"graph"`
+	}
+	if err := json.Unmarshal(definition, &payload); err == nil && len(payload.Graph.Nodes) > 0 {
+		for _, node := range payload.Graph.Nodes {
+			ec := nodeEffectClass(node)
+			if ec == "irreversible" {
+				return true
+			}
+			if ec == "" && containsIrreversibleActionToken(strings.ToLower(string(node))) {
+				return true
+			}
+		}
+		return false
+	}
 	return containsIrreversibleActionToken(strings.ToLower(string(definition)))
 }
 
 // containsIrreversibleActionToken reports whether a lower-cased JSON fragment
-// names an action whose side effect cannot be undone. Used both at the whole-task
-// level and per graph node so the two never disagree about what is irreversible.
+// names an action whose side effect cannot be undone. Used as fallback when
+// effect_class is absent (legacy tasks). New code should set effect_class.
 func containsIrreversibleActionToken(lower string) bool {
 	return strings.Contains(lower, `"irreversible":true`) ||
 		strings.Contains(lower, `"db_write"`) ||
@@ -387,8 +421,7 @@ func containsIrreversibleActionToken(lower string) bool {
 }
 
 // irreversibleStepIndexes returns the 0-based execution-graph node indexes whose
-// action is irreversible, in order. The index matches the WalEntry/step_index
-// space, so it can be compared against a checkpoint's last_committed_step.
+// action is irreversible, in order. Uses effect_class when present, heuristic fallback otherwise.
 func irreversibleStepIndexes(definition json.RawMessage) []int {
 	var payload struct {
 		Graph struct {
@@ -400,7 +433,12 @@ func irreversibleStepIndexes(definition json.RawMessage) []int {
 	}
 	indexes := make([]int, 0, len(payload.Graph.Nodes))
 	for i, node := range payload.Graph.Nodes {
-		if containsIrreversibleActionToken(strings.ToLower(string(node))) {
+		ec := nodeEffectClass(node)
+		if ec == "irreversible" {
+			indexes = append(indexes, i)
+			continue
+		}
+		if ec == "" && containsIrreversibleActionToken(strings.ToLower(string(node))) {
 			indexes = append(indexes, i)
 		}
 	}
