@@ -1,3 +1,9 @@
+//go:build ignore
+// +build ignore
+
+// Archived: inference cost forecasting (pruned — not part of Action→Run→Proof wedge).
+// See attic/ for full inference plane. This file is ignored in default build.
+
 package middleware
 
 import (
@@ -6,10 +12,10 @@ import (
 	"sync"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/Igris-inertial/system/igris-overture/config"
-	"github.com/Igris-inertial/system/igris-overture/models"
-	"github.com/Igris-inertial/system/igris-overture/observability"
-	"github.com/Igris-inertial/system/igris-overture/providers"
+	"github.com/wiramahendra/overture/config"
+	"github.com/wiramahendra/overture/models"
+	"github.com/wiramahendra/overture/observability"
+	"github.com/wiramahendra/overture/providers"
 )
 
 // CostForecastMiddleware adds cost estimation headers to inference requests
