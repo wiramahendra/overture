@@ -6,7 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/Igris-inertial/system/igris-overture/observability"
+	"github.com/wiramahendra/overture/observability"
 )
 
 var (
