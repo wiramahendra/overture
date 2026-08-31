@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/models"
+	"github.com/wiramahendra/overture/models"
 )
 
 func TestBuildOfflineLicenseArtifactSignsPayload(t *testing.T) {
