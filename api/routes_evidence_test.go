@@ -23,7 +23,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Igris-inertial/system/igris-overture/internal/canonicaljson"
+	"github.com/wiramahendra/overture/internal/canonicaljson"
 )
 
 // ---------------------------------------------------------------------------
