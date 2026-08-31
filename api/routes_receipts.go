@@ -13,9 +13,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/compliance"
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/compliance"
+	"github.com/wiramahendra/overture/coordinator"
+	"github.com/wiramahendra/overture/middleware"
 )
 
 // Receipt is the API shape for a single execution receipt.
