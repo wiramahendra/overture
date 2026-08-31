@@ -9,7 +9,7 @@ import (
 	"log"
 
 	"github.com/google/uuid"
-	"github.com/Igris-inertial/system/igris-overture/models"
+	"github.com/wiramahendra/overture/models"
 )
 
 // ProviderRegistryRepository defines the interface for provider registry operations
