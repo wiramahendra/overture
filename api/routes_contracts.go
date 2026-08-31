@@ -37,8 +37,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/internal/canonicaljson"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/internal/canonicaljson"
+	"github.com/wiramahendra/overture/middleware"
 )
 
 const (
