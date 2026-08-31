@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/logging"
-	"github.com/Igris-inertial/system/igris-overture/models"
+	"github.com/wiramahendra/overture/logging"
+	"github.com/wiramahendra/overture/models"
 )
 
 const anthropicVersion = "2023-06-01"
