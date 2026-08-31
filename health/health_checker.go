@@ -1,9 +1,13 @@
 package health
 
 import (
+	"github.com/wiramahendra/overture/internal"
+
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -79,6 +83,8 @@ func (hc *HealthChecker) CheckHealth(ctx context.Context) *OverallHealth {
 	// Check database
 	if hc.dbEnabled && hc.db != nil {
 		health.Components["database"] = hc.checkDatabase(ctx)
+		health.Components["migrations"] = hc.checkMigrations(ctx)
+		health.Components["signing_keys"] = hc.checkSigningKeys(ctx)
 	}
 
 	// Check Redis
@@ -204,6 +210,88 @@ func (hc *HealthChecker) checkRedis(ctx context.Context) ComponentHealth {
 		health.Message = "Redis connection healthy"
 	}
 
+	return health
+}
+
+// checkMigrations verifies required tables/columns for first-class execution
+func (hc *HealthChecker) checkMigrations(ctx context.Context) ComponentHealth {
+	health := ComponentHealth{
+		LastChecked: time.Now(),
+		Details:     make(map[string]interface{}),
+	}
+	// Required tables for durable execution
+	requiredTables := []string{"task_records", "wal_checkpoints", "runtime_instances"}
+	missing := []string{}
+	for _, tbl := range requiredTables {
+		var exists bool
+		err := hc.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name=$1)`, tbl).Scan(&exists)
+		if err != nil || !exists {
+			missing = append(missing, tbl)
+		}
+	}
+	if len(missing) > 0 {
+		health.Status = StatusUnhealthy
+		health.Message = fmt.Sprintf("Missing required tables: %s", strings.Join(missing, ", "))
+		health.Details["missing_tables"] = missing
+		return health
+	}
+	// Check DLQ migration 073
+	var dlqExists bool
+	_ = hc.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='execution_dlq')`).Scan(&dlqExists)
+	health.Details["execution_dlq"] = dlqExists
+	var attemptColExists bool
+	_ = hc.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='task_records' AND column_name='attempt_count')`).Scan(&attemptColExists)
+	health.Details["attempt_count_column"] = attemptColExists
+	if !dlqExists || !attemptColExists {
+		health.Status = StatusDegraded
+		health.Message = "DLQ migration 073 not applied — run psql database/migrations/073_execution_dlq.sql"
+		return health
+	}
+	health.Status = StatusHealthy
+	health.Message = "Migrations up-to-date"
+	return health
+}
+
+// checkSigningKeys verifies signing key availability for runtime artifact verification
+// In production, missing keys are Unhealthy (fail-closed); in dev, Degraded.
+func (hc *HealthChecker) checkSigningKeys(ctx context.Context) ComponentHealth {
+	health := ComponentHealth{
+		LastChecked: time.Now(),
+		Details:     make(map[string]interface{}),
+	}
+	overtureKey := os.Getenv("OVERTURE_SIGNING_KEY")
+	if overtureKey == "" {
+		overtureKey = internal.EnvOrLegacy("OVERTURE_OVERTURE_SIGNING_KEY", "IGRIS_OVERTURE_SIGNING_KEY")
+	}
+	runtimeKey := os.Getenv("OVERTURE_RUNTIME_PUBLIC_KEY")
+	if runtimeKey == "" {
+		runtimeKey = internal.EnvOrLegacy("OVERTURE_RUNTIME_PUBLIC_KEY", "IGRIS_RUNTIME_PUBLIC_KEY")
+	}
+	health.Details["overture_signing_key_present"] = overtureKey != ""
+	health.Details["runtime_public_key_present"] = runtimeKey != ""
+	isProd := os.Getenv("ENV") == "production" || os.Getenv("OVERTURE_ENV") == "production"
+	if overtureKey == "" {
+		if isProd {
+			health.Status = StatusUnhealthy
+			health.Message = "OVERTURE_SIGNING_KEY not set — production requires signing key (fail-closed)"
+		} else {
+			health.Status = StatusDegraded
+			health.Message = "OVERTURE_SIGNING_KEY not set — governed policy decisions disabled"
+		}
+		return health
+	}
+	if runtimeKey == "" {
+		if isProd {
+			health.Status = StatusUnhealthy
+			health.Message = "OVERTURE_RUNTIME_PUBLIC_KEY not set — production requires runtime public key (fail-closed)"
+		} else {
+			health.Status = StatusDegraded
+			health.Message = "OVERTURE_RUNTIME_PUBLIC_KEY not set — artifact verification bypass possible"
+		}
+		return health
+	}
+	health.Status = StatusHealthy
+	health.Message = "Signing keys present"
 	return health
 }
 
