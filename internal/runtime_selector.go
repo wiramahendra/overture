@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/circuitbreaker"
-	"github.com/Igris-inertial/system/igris-overture/models"
+	"github.com/wiramahendra/overture/circuitbreaker"
+	"github.com/wiramahendra/overture/models"
 )
 
 // RuntimeRepositoryI is the subset of RuntimeRepository used by RuntimeSelector,
