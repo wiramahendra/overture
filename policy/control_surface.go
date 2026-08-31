@@ -22,8 +22,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/observability"
-	"github.com/Igris-inertial/system/igris-overture/security"
+	"github.com/wiramahendra/overture/observability"
+	"github.com/wiramahendra/overture/security"
 )
 
 // PolicyUpdate represents a policy update request/response
