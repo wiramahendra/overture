@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/internal"
+	"github.com/wiramahendra/overture/internal"
 	"github.com/google/uuid"
 )
 
@@ -64,7 +64,9 @@ type TaskRecord struct {
 	DispatchedAt         *time.Time              `json:"dispatched_at,omitempty"`
 	CompletedAt          *time.Time              `json:"completed_at,omitempty"`
 	CanceledAt           *time.Time              `json:"canceled_at,omitempty"`
-	CreatedAt            time.Time               `json:"created_at"`
+	CreatedAt              time.Time               `json:"created_at"`
+	AttemptCount           int                     `json:"attempt_count"`
+	HasIrreversibleEffect  bool                    `json:"has_irreversible_effect"`
 
 	// ExecutedTarget records which Action execution target actually ran the
 	// task (hosted_api, webhook, local_runtime, mock_demo, or hybrid_fallback
@@ -2090,7 +2092,7 @@ func validateAIToolAuditReplay(replay *AIToolAuditReplay) {
 	if strings.TrimSpace(replay.RuntimePublicKeyEd25519) != "" {
 		replay.RuntimeSignatureKeySource = "runtime_registry"
 	}
-	if replay.RuntimeSignatureKeySource == "" && strings.TrimSpace(os.Getenv("IGRIS_RUNTIME_PUBLIC_KEY")) != "" {
+	if replay.RuntimeSignatureKeySource == "" && strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_RUNTIME_PUBLIC_KEY", "IGRIS_RUNTIME_PUBLIC_KEY")) != "" {
 		replay.RuntimeSignatureKeySource = "env_fallback"
 	}
 	var verifyErr error
@@ -2267,7 +2269,7 @@ func validateRoboticsAuditReplay(replay *RoboticsAuditReplay) {
 	if strings.TrimSpace(replay.RuntimePublicKeyEd25519) != "" {
 		replay.RuntimeSignatureKeySource = "runtime_registry"
 	}
-	if replay.RuntimeSignatureKeySource == "" && strings.TrimSpace(os.Getenv("IGRIS_RUNTIME_PUBLIC_KEY")) != "" {
+	if replay.RuntimeSignatureKeySource == "" && strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_RUNTIME_PUBLIC_KEY", "IGRIS_RUNTIME_PUBLIC_KEY")) != "" {
 		replay.RuntimeSignatureKeySource = "env_fallback"
 	}
 	var verifyErr error
@@ -2525,7 +2527,7 @@ func (s *CheckpointStore) GetTask(taskID uuid.UUID, tenantID string) (*TaskRecor
 		       proof_execution_id, proof_expected_hash, proof_stored_hash, proof_signature, proof_status, proof_checked_at,
 		       proof_verified, proof_hash_valid, proof_signature_matches, proof_runtime_key_found, proof_chain_link_valid, proof_verification_reason, proof_verified_at,
 		       idempotency_key, failure_reason, failure_details,
-		       deadline_at, dispatched_at, completed_at, canceled_at, created_at,
+		       deadline_at, dispatched_at, completed_at, canceled_at, created_at, COALESCE(attempt_count,0), COALESCE(has_irreversible_effect,false),
 		       executed_target, fallback_reason,
 		       registered_agent_id, registered_agent_name
 		FROM task_records
@@ -2545,7 +2547,7 @@ const getTaskByIdempotencyKeySQL = `
 		       proof_execution_id, proof_expected_hash, proof_stored_hash, proof_signature, proof_status, proof_checked_at,
 		       proof_verified, proof_hash_valid, proof_signature_matches, proof_runtime_key_found, proof_chain_link_valid, proof_verification_reason, proof_verified_at,
 		       idempotency_key, failure_reason, failure_details,
-		       deadline_at, dispatched_at, completed_at, canceled_at, created_at,
+		       deadline_at, dispatched_at, completed_at, canceled_at, created_at, COALESCE(attempt_count,0), COALESCE(has_irreversible_effect,false),
 		       executed_target, fallback_reason,
 		       registered_agent_id, registered_agent_name
 		FROM task_records
@@ -2565,7 +2567,7 @@ func (s *CheckpointStore) GetTasksByTenant(tenantID string, limit int) ([]*TaskR
 		       proof_execution_id, proof_expected_hash, proof_stored_hash, proof_signature, proof_status, proof_checked_at,
 		       proof_verified, proof_hash_valid, proof_signature_matches, proof_runtime_key_found, proof_chain_link_valid, proof_verification_reason, proof_verified_at,
 		       idempotency_key, failure_reason, failure_details,
-		       deadline_at, dispatched_at, completed_at, canceled_at, created_at,
+		       deadline_at, dispatched_at, completed_at, canceled_at, created_at, COALESCE(attempt_count,0), COALESCE(has_irreversible_effect,false),
 		       executed_target, fallback_reason,
 		       registered_agent_id, registered_agent_name
 		FROM task_records
@@ -2603,7 +2605,7 @@ func (s *CheckpointStore) GetTasksByTenantAndAgent(tenantID string, agentID uuid
 		       proof_execution_id, proof_expected_hash, proof_stored_hash, proof_signature, proof_status, proof_checked_at,
 		       proof_verified, proof_hash_valid, proof_signature_matches, proof_runtime_key_found, proof_chain_link_valid, proof_verification_reason, proof_verified_at,
 		       idempotency_key, failure_reason, failure_details,
-		       deadline_at, dispatched_at, completed_at, canceled_at, created_at,
+		       deadline_at, dispatched_at, completed_at, canceled_at, created_at, COALESCE(attempt_count,0), COALESCE(has_irreversible_effect,false),
 		       executed_target, fallback_reason,
 		       registered_agent_id, registered_agent_name
 		FROM task_records
@@ -2931,7 +2933,7 @@ func scanTaskRecord(row scanner) (*TaskRecord, error) {
 		&proofExecutionID, &proofExpectedHash, &proofStoredHash, &proofSignature, &proofStatus, &proofCheckedAt,
 		&proofVerified, &proofHashValid, &proofSignatureMatches, &proofRuntimeKeyFound, &proofChainLinkValid, &proofVerificationReason, &proofVerifiedAt,
 		&t.IdempotencyKey, &t.FailureReason, &failureDetailBytes,
-		&t.DeadlineAt, &t.DispatchedAt, &t.CompletedAt, &t.CanceledAt, &t.CreatedAt,
+		&t.DeadlineAt, &t.DispatchedAt, &t.CompletedAt, &t.CanceledAt, &t.CreatedAt, &t.AttemptCount, &t.HasIrreversibleEffect,
 		&executedTarget, &fallbackReason,
 		&registeredAgentID, &registeredAgentName,
 	)
