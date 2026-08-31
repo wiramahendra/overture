@@ -8,11 +8,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/internal"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
-	"github.com/Igris-inertial/system/igris-overture/models"
-	"github.com/Igris-inertial/system/igris-overture/observability"
-	"github.com/Igris-inertial/system/igris-overture/security"
+	"github.com/wiramahendra/overture/internal"
+	"github.com/wiramahendra/overture/middleware"
+	"github.com/wiramahendra/overture/models"
+	"github.com/wiramahendra/overture/observability"
+	"github.com/wiramahendra/overture/security"
 )
 
 // runtimeRegisterRequest is the extended registration payload.
