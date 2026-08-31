@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/Igris-inertial/system/igris-overture/billing"
+	"github.com/wiramahendra/overture/billing"
 )
 
 // SubscriptionHandler handles subscription-related endpoints
