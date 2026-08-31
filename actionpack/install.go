@@ -125,7 +125,7 @@ func entryToCreateRequest(entry ActionEntry) ActionCreateRequest {
 		DisplayName:      display,
 		Description:      entry.Description,
 		TargetType:       entry.TargetType,
-		TargetURL:        "",
+		TargetURL:        strings.TrimSpace(entry.TargetURL),
 		Method:           "POST",
 		PolicyPreset:     entry.PolicyPreset,
 		ReplayClass:      entry.ReplayClass,
