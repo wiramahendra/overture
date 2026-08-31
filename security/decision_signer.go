@@ -10,7 +10,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/observability"
+	"github.com/wiramahendra/overture/observability"
 )
 
 // DecisionSigner handles signing routing decisions before sending to Runtime
