@@ -1,0 +1,92 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: overture
+          POSTGRES_PASSWORD: overture
+          POSTGRES_DB: overture
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://overture:overture@localhost:5432/overture?sslmode=disable
+      POSTGRES_URL: postgres://overture:overture@localhost:5432/overture?sslmode=disable
+      OVERTURE_DATABASE_URL: postgres://overture:overture@localhost:5432/overture?sslmode=disable
+      ENABLE_PERSISTENCE: "true"
+      DB_FAIL_FAST: "true"
+      REDIS_URL: redis://localhost:6379/0
+      USE_REDIS: "true"
+      BETTER_AUTH_SECRET: ci-test-secret
+      ALLOWED_ORIGINS: "*"
+      OVERTURE_RUNTIME_PUBLIC_KEY: ""
+      OVERTURE_SIGNING_KEY: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: Migrate DB
+        run: |
+          for f in $(ls -1 database/migrations/*.sql | sort); do
+            echo ">> $f"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test (with race, no skips)
+        run: go test -race -count=1 ./...
+        # Tenant isolation and proof tests now run with real Postgres (no Skip)
+
+      - name: Build
+        run: go build -o /tmp/overture ./cmd/server
+
+      - name: Route manifest check
+        run: /tmp/overture server & sleep 2; curl -fsS http://localhost:8080/healthz | jq; pkill overture || true
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          pip install ./sdk/python
+          pip install pytest ruff
+      - name: Lint
+        run: ruff check sdk/python/src
+      - name: Test
+        run: pytest sdk/python/tests -q
+      - name: Import check (overture + igris compat)
+        run: |
+          python -c "from overture import Overture; print('overture OK', Overture)"
+          python -c "from igris import Igris; print('igris compat OK')"
