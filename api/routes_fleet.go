@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/internal"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
-	"github.com/Igris-inertial/system/igris-overture/security"
+	"github.com/wiramahendra/overture/internal"
+	"github.com/wiramahendra/overture/middleware"
+	"github.com/wiramahendra/overture/security"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
