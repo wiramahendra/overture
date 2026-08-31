@@ -1,0 +1,6 @@
+.git
+.gitignore
+sdk/python/.venv
+sdk/python/__pycache__
+api/logs
+*.log
