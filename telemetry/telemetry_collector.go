@@ -1,3 +1,5 @@
+//go:build ignore
+ // +build ignore
 // Package telemetry provides request telemetry collection and storage
 package telemetry
 
@@ -10,11 +12,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/Igris-inertial/system/igris-overture/adapters"
-	"github.com/Igris-inertial/system/igris-overture/logging"
-	"github.com/Igris-inertial/system/igris-overture/metrics"
-	"github.com/Igris-inertial/system/igris-overture/models"
-	"github.com/Igris-inertial/system/igris-overture/routing"
+	"github.com/wiramahendra/overture/adapters"
+	"github.com/wiramahendra/overture/logging"
+	"github.com/wiramahendra/overture/metrics"
+	"github.com/wiramahendra/overture/models"
+	"github.com/wiramahendra/overture/routing"
 )
 
 // TelemetryCollector collects and stores routing telemetry
