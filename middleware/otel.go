@@ -11,7 +11,7 @@ import (
 
 const (
 	tracerKey  = "otel-tracer"
-	tracerName = "github.com/Igris-inertial/system"
+	tracerName = "github.com/wiramahendra/overture"
 )
 
 // OTelConfig holds configuration for OpenTelemetry middleware
