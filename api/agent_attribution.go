@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/Igris-inertial/system/igris-overture/agentregistry"
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
+	"github.com/wiramahendra/overture/agentregistry"
+	"github.com/wiramahendra/overture/coordinator"
 	"github.com/google/uuid"
 )
 
