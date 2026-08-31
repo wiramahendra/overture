@@ -13,7 +13,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Igris-inertial/system/igris-overture/trustrecs"
+	"github.com/wiramahendra/overture/trustrecs"
 )
 
 // tb builds an intelligenceBreakdown with rates derived the same way the
