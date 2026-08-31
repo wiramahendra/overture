@@ -13,7 +13,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Igris-inertial/system/igris-overture/policyproposals"
+	"github.com/wiramahendra/overture/policyproposals"
 )
 
 // newProposalApp mounts the proposal handlers behind a stub that injects a tenant
