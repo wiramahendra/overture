@@ -1,6 +1,8 @@
 package api
 
 import (
+	"github.com/wiramahendra/overture/internal"
+
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -19,7 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
+	"github.com/wiramahendra/overture/coordinator"
 )
 
 const (
@@ -353,6 +355,6 @@ func sha256Hex(body []byte) string {
 }
 
 func allowUnsignedRuntimeCallbacks() bool {
-	value := strings.ToLower(strings.TrimSpace(os.Getenv("IGRIS_ALLOW_UNSIGNED_RUNTIME_CALLBACKS")))
+	value := strings.ToLower(strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_ALLOW_UNSIGNED_RUNTIME_CALLBACKS", "IGRIS_ALLOW_UNSIGNED_RUNTIME_CALLBACKS")))
 	return value == "true" || value == "1" || value == "yes"
 }
