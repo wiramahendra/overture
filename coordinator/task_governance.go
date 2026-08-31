@@ -1,6 +1,8 @@
 package coordinator
 
 import (
+	"github.com/wiramahendra/overture/internal"
+
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -379,7 +381,7 @@ func (tc *TaskCoordinator) buildTaskPermissionEnvelope(ctx context.Context, task
 	}
 	now := time.Now().UnixMilli()
 	expiresAt := now + int64(5*time.Minute/time.Millisecond)
-	keyVersion := strings.TrimSpace(os.Getenv("IGRIS_OVERTURE_SIGNING_KEY_VERSION"))
+	keyVersion := strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_OVERTURE_SIGNING_KEY_VERSION", "IGRIS_OVERTURE_SIGNING_KEY_VERSION"))
 	envelope := &TaskPermissionEnvelope{
 		SchemaVersion:        "task_permission_envelope.v1",
 		EnvelopeID:           uuid.NewString(),
