@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Igris-inertial/system/igris-overture/alerts"
+	"github.com/wiramahendra/overture/alerts"
 )
 
 // WebhookProvider sends alerts to generic webhook endpoints
