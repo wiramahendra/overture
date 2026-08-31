@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/Igris-inertial/system/igris-overture/security"
+	"github.com/wiramahendra/overture/security"
 )
 
 // TenantAuth provides tenant authentication middleware
@@ -123,12 +123,15 @@ func (ta *TenantAuth) Stop() {
 }
 
 // Authenticate is the main authentication middleware
-// It validates JWT tokens and populates tenant context
+// It validates JWT tokens and populates tenant context — fail-closed if JWT not configured.
 func (ta *TenantAuth) Authenticate() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Skip authentication if disabled (backward compatibility)
 		if !ta.enabled {
-			return c.Next()
+			ta.logger.Printf("[TenantAuth] auth not configured — rejecting (fail-closed)")
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"error": "auth_not_configured",
+				"code":  "AUTH_NOT_CONFIGURED",
+			})
 		}
 
 		// Extract token from Authorization header
@@ -188,11 +191,15 @@ func (ta *TenantAuth) Authenticate() fiber.Handler {
 			ta.logger.Printf("[TenantAuth] Login queue full, dropping update for tenant %s", claims.TenantID)
 		}
 
-	// P0-3 FIX: Set tenant context in database session for Row-Level Security
 	if ta.db != nil {
 		if err := ta.setTenantContextInDB(claims.TenantID); err != nil {
 			ta.logger.Printf("[TenantAuth] Failed to set tenant context in DB: %v", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "tenant_context_failed",
+				"code":  "TENANT_CONTEXT_FAILED",
+			})
 		}
+		defer func() { _ = ta.clearTenantContextInDB() }()
 	}
 		// Create tenant context
 		tenantCtx := &TenantContext{
@@ -232,9 +239,11 @@ func (ta *TenantAuth) RequireAdmin() fiber.Handler {
 }
 
 // Optional authentication - doesn't fail if no token provided
+// Still fail-closed if enabled=false in production — handled by Authenticate, not here.
 func (ta *TenantAuth) OptionalAuth() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if !ta.enabled {
+			// Optional path: allow anon when JWT not configured at all (dev only)
 			return c.Next()
 		}
 
@@ -328,11 +337,12 @@ func GetTenantContext(c *fiber.Ctx) *TenantContext {
 }
 
 // GetTenantID is a helper to quickly get the tenant ID from context
+// Returns "" if no tenant — callers must fail-closed (401) instead of using "default".
 func GetTenantID(c *fiber.Ctx) string {
 	if ctx := GetTenantContext(c); ctx != nil {
 		return ctx.TenantID
 	}
-	return "default" // Fallback to default for backward compatibility
+	return ""
 }
 
 // RequireTenant ensures a tenant is authenticated (alias for Authenticate for clarity)
@@ -425,11 +435,15 @@ func (aka *APIKeyAuth) Stop() {
 	}
 }
 
-// Authenticate validates API key and populates tenant context
+// Authenticate validates API key and populates tenant context — fail-closed if DB not configured
 func (aka *APIKeyAuth) Authenticate() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if !aka.enabled {
-			return c.Next()
+			aka.logger.Printf("[APIKeyAuth] auth not configured — rejecting (fail-closed)")
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"error": "auth_not_configured",
+				"code":  "AUTH_NOT_CONFIGURED",
+			})
 		}
 
 		// Extract API key from header
@@ -482,15 +496,21 @@ func (aka *APIKeyAuth) Authenticate() fiber.Handler {
 			})
 		}
 
+		// Set tenant context in DB session for Row-Level Security — fail-closed
+		if aka.db != nil {
+			if err := aka.setTenantContextInDB(tenantID); err != nil {
+				aka.logger.Printf("[APIKeyAuth] Failed to set tenant context in DB: %v", err)
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "tenant_context_failed",
+					"code":  "TENANT_CONTEXT_FAILED",
+				})
+			}
+			defer func() { _ = aka.clearTenantContextInDB() }()
+		}
+
 		// Update last login (async, non-blocking via worker pool)
 		select {
 		case aka.loginQueue <- tenantID:
-	// P0-3 FIX: Set tenant context in database session for Row-Level Security
-	if aka.db != nil {
-		if err := aka.setTenantContextInDB(tenantID); err != nil {
-			aka.logger.Printf("[APIKeyAuth] Failed to set tenant context in DB: %v", err)
-		}
-	}
 			// Successfully queued
 		default:
 			// Queue full, log warning but don't block request
@@ -524,13 +544,16 @@ func (aka *APIKeyAuth) updateLastLoginWithContext(ctx context.Context, tenantID 
 
 // P0-3 FIX: setTenantContextInDB sets the tenant_id in the database session for RLS
 func (ta *TenantAuth) setTenantContextInDB(tenantID string) error {
-	// Set the app.tenant_id session variable for Row-Level Security
-	// This MUST be called after JWT validation to enforce tenant isolation
 	_, err := ta.db.Exec(`SELECT set_tenant_context($1)`, tenantID)
 	if err != nil {
 		return fmt.Errorf("failed to set tenant context: %w", err)
 	}
 	return nil
+}
+
+func (ta *TenantAuth) clearTenantContextInDB() error {
+	_, err := ta.db.Exec(`SELECT clear_tenant_context()`)
+	return err
 }
 
 // P0-3 FIX: setTenantContextInDB for API key auth
@@ -540,6 +563,11 @@ func (aka *APIKeyAuth) setTenantContextInDB(tenantID string) error {
 		return fmt.Errorf("failed to set tenant context: %w", err)
 	}
 	return nil
+}
+
+func (aka *APIKeyAuth) clearTenantContextInDB() error {
+	_, err := aka.db.Exec(`SELECT clear_tenant_context()`)
+	return err
 }
 
 // BypassAuth creates a middleware that bypasses authentication for specific paths
