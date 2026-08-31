@@ -16,10 +16,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/Igris-inertial/system/igris-overture/agentregistry"
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
-	"github.com/Igris-inertial/system/igris-overture/internal"
-	"github.com/Igris-inertial/system/igris-overture/middleware"
+	"github.com/wiramahendra/overture/agentregistry"
+	"github.com/wiramahendra/overture/coordinator"
+	"github.com/wiramahendra/overture/internal"
+	"github.com/wiramahendra/overture/middleware"
 )
 
 // Execution target vocabulary for the unified Action model (Slice 1).
@@ -1391,7 +1391,7 @@ func buildBoundActionExecutionGraphDefinition(req actionRunRequest) (json.RawMes
 }
 
 func boundActionYieldAfterCheckpoint() bool {
-	value := strings.TrimSpace(os.Getenv("IGRIS_BOUND_ACTION_YIELD_AFTER_CHECKPOINT"))
+	value := strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_BOUND_ACTION_YIELD_AFTER_CHECKPOINT", "IGRIS_BOUND_ACTION_YIELD_AFTER_CHECKPOINT"))
 	switch strings.ToLower(value) {
 	case "1", "true", "yes", "on":
 		return true
@@ -1621,7 +1621,7 @@ func normalizeActionDefinitionRequest(req actionDefinitionRequest, current *acti
 		if strings.TrimSpace(def.TargetURL) == "" {
 			return actionDefinition{}, fmt.Errorf("target_url is required for %s targets", def.TargetType)
 		}
-		if _, err := ValidateActionTargetURLSyntax(def.TargetURL); err != nil {
+		if _, err := ValidateActionTargetURL(def.TargetURL); err != nil {
 			return actionDefinition{}, fmt.Errorf("unsafe_target_url: %w", err)
 		}
 	}
@@ -2007,7 +2007,7 @@ func stringifyActionBody(body interface{}) string {
 }
 
 func actionConsoleURL(taskID string) string {
-	base := strings.TrimRight(strings.TrimSpace(os.Getenv("IGRIS_CONSOLE_URL")), "/")
+	base := strings.TrimRight(strings.TrimSpace(internal.EnvOrLegacy("OVERTURE_CONSOLE_URL", "IGRIS_CONSOLE_URL")), "/")
 	if base == "" {
 		return ""
 	}
