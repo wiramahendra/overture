@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Igris-inertial/system/igris-overture/coordinator"
-	"github.com/Igris-inertial/system/igris-overture/internal/canonicaljson"
+	"github.com/wiramahendra/overture/coordinator"
+	"github.com/wiramahendra/overture/internal/canonicaljson"
 )
 
 func sampleBoundTaskDefinition(t *testing.T, actionName string, toolInput map[string]interface{}) json.RawMessage {
