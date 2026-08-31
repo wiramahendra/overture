@@ -29,7 +29,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Igris-inertial/system/igris-overture/security"
+	"github.com/wiramahendra/overture/security"
 )
 
 // Retains one ordinary argument value (a synthetic unicode business label)
